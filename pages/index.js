@@ -5,25 +5,31 @@ const MODES = {
   normal: {
     id: "normal",
     label: "Normal",
-    description: "Kualitas seimbang, ukuran lebih kecil. Aman untuk kebanyakan device.",
-    scale: 0.75,
+    description:
+      "Kualitas seimbang, ukuran lebih kecil. Aman untuk kebanyakan device.",
+    scale: 0.85,
     maxSize: 512,
+    minSize: 16,
     minifyJson: true
   },
   extreme: {
     id: "extreme",
     label: "Extreme",
-    description: "Kualitas sedikit turun, performa naik. Cocok untuk device mid–low.",
-    scale: 0.5,
+    description:
+      "Kualitas turun cukup jauh, performa naik. Cocok untuk device mid–low.",
+    scale: 0.6,
     maxSize: 256,
+    minSize: 8,
     minifyJson: true
   },
   ultra: {
     id: "ultra",
     label: "Ultra Extreme",
-    description: "Kualitas dikorbankan demi performa maksimal. Untuk device kentang / HP.",
-    scale: 0.35,
+    description:
+      "Kualitas dikorbankan demi performa maksimal. Untuk device kentang / HP.",
+    scale: 0.4,
     maxSize: 128,
+    minSize: 4,
     minifyJson: true
   }
 };
@@ -40,7 +46,6 @@ export default function Home() {
   const appendLog = (msg) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${timestamp}] ${msg}`]);
-    // auto scroll
     setTimeout(() => {
       if (logRef.current) {
         logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -62,7 +67,11 @@ export default function Home() {
 
     try {
       setIsProcessing(true);
-      appendLog(`File diterima: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
+      appendLog(
+        `File diterima: ${file.name} (${(file.size / (1024 * 1024)).toFixed(
+          2
+        )} MB)`
+      );
       appendLog(`Mode optimize: ${modeConfig.label}`);
 
       const zip = await JSZip.loadAsync(file);
@@ -89,21 +98,32 @@ export default function Home() {
         }
 
         stats.totalFiles++;
+        const lower = name.toLowerCase();
 
-        if (shouldExclude(name)) {
+        // 1) Buang hanya file non-game (psd/txt/md/bak, dll)
+        if (shouldExcludeNonGameFile(lower)) {
           stats.removed++;
-          appendLog(`Dibuang (tidak penting): ${name}`);
+          appendLog(`Dibuang (non-game file): ${name}`);
           continue;
         }
 
-        if (name.toLowerCase().endsWith(".png")) {
+        // 2) PNG – SELALU dipertahankan, cuma di-resize
+        if (lower.endsWith(".png")) {
           stats.pngCount++;
           appendLog(`Optimize image: ${name}`);
           const arrayBuffer = await entry.async("arraybuffer");
-          const optimizedBuffer = await optimizePng(arrayBuffer, modeConfig, appendLog);
+          const optimizedBuffer = await optimizePng(
+            arrayBuffer,
+            modeConfig,
+            appendLog
+          );
           outZip.file(name, optimizedBuffer);
           stats.pngOptimized++;
-        } else if (name.toLowerCase().endsWith(".json")) {
+          continue;
+        }
+
+        // 3) JSON – boleh di-minify, tidak pernah dihapus
+        if (lower.endsWith(".json")) {
           stats.jsonCount++;
           const text = await entry.async("string");
           if (modeConfig.minifyJson) {
@@ -120,11 +140,12 @@ export default function Home() {
           } else {
             outZip.file(name, text);
           }
-        } else {
-          // file lain: copy apa adanya
-          const content = await entry.async("arraybuffer");
-          outZip.file(name, content);
+          continue;
         }
+
+        // 4) File lain – disalin apa adanya
+        const content = await entry.async("arraybuffer");
+        outZip.file(name, content);
       }
 
       appendLog("Menyusun ZIP hasil optimize...");
@@ -135,7 +156,6 @@ export default function Home() {
       });
 
       appendLog("Selesai! Menyiapkan download optimize_file.zip");
-
       triggerDownload(optimizedBlob, "optimize_file.zip");
 
       setSummary({
@@ -172,7 +192,8 @@ export default function Home() {
           <section className="section">
             <h2>1. Upload resource pack</h2>
             <p className="section-sub">
-              Upload file <code>.zip</code> resource pack kamu. Proses optimize berjalan di browser, server tidak menyentuh data sama sekali.
+              Upload file <code>.zip</code> resource pack kamu. Proses optimize
+              berjalan di browser, server tidak menyentuh data sama sekali.
             </p>
 
             <div className="upload-area">
@@ -205,7 +226,8 @@ export default function Home() {
           <section className="section">
             <h2>2. Pilih mode optimize</h2>
             <p className="section-sub">
-              Setiap mode mengubah resolusi & pixel image, serta meminify JSON (kalau diaktifkan).
+              Setiap mode mengubah resolusi & pixel image, serta meminify JSON
+              (kalau diaktifkan).
             </p>
 
             <div className="mode-grid">
@@ -224,7 +246,9 @@ export default function Home() {
                   <ul className="mode-meta">
                     <li>Scale: {Math.round(m.scale * 100)}%</li>
                     <li>Max texture: {m.maxSize}px</li>
-                    <li>JSON: {m.minifyJson ? "Minified" : "Original"}</li>
+                    <li>
+                      JSON: {m.minifyJson ? "Minified" : "Tidak di-minify"}
+                    </li>
                   </ul>
                 </button>
               ))}
@@ -234,16 +258,19 @@ export default function Home() {
           <section className="section">
             <div className="section-header-inline">
               <h2>3. Console log</h2>
-              {isProcessing && <span className="processing-dot">Optimizing...</span>}
+              {isProcessing && (
+                <span className="processing-dot">Optimizing...</span>
+              )}
             </div>
             <p className="section-sub">
-              Semua langkah proses ditampilkan di sini. Kalau ada error, akan muncul juga.
+              Semua langkah proses ditampilkan di sini. Kalau ada error, akan
+              muncul juga.
             </p>
 
             <div className="console" ref={logRef}>
               {logs.length === 0 ? (
                 <div className="console-placeholder">
-                  Menunggu file diupload...  
+                  Menunggu file diupload...
                   <br />
                   Setelah kamu upload, proses akan berjalan otomatis.
                 </div>
@@ -261,7 +288,8 @@ export default function Home() {
             <section className="section">
               <h2>4. Hasil optimasi</h2>
               <p className="section-sub">
-                Berikut ringkasan apa saja yang dioptimasi dari resource pack kamu.
+                Berikut ringkasan apa saja yang dioptimasi dari resource pack
+                kamu.
               </p>
 
               <div className="summary-grid">
@@ -272,7 +300,8 @@ export default function Home() {
                     {(summary.optimizedSize / (1024 * 1024)).toFixed(2)} MB
                   </div>
                   <div className="summary-extra">
-                    Penghematan {(
+                    Penghematan{" "}
+                    {(
                       (1 - summary.optimizedSize / summary.originalSize) *
                       100
                     ).toFixed(1)}
@@ -301,15 +330,15 @@ export default function Home() {
                   <div className="summary-label">File dibuang</div>
                   <div className="summary-value">{summary.removed}</div>
                   <div className="summary-extra">
-                    File non-esensial seperti PSD, TXT, dan backup.
+                    Hanya file non-esensial seperti PSD, TXT, dan backup.
                   </div>
                 </div>
               </div>
 
               <p className="section-sub">
                 File hasil optimasi sudah otomatis di-download dengan nama{" "}
-                <code>optimize_file.zip</code>.  
-                Jika ingin mengulang, upload lagi file baru.
+                <code>optimize_file.zip</code>. Jika ingin mengulang, upload
+                lagi file baru.
               </p>
             </section>
           )}
@@ -323,45 +352,79 @@ export default function Home() {
   );
 }
 
-// -------- Helpers & core optimization logic --------
+// ===== Helpers =====
 
-function shouldExclude(name) {
-  const lower = name.toLowerCase();
-  // buang file yang hampir pasti tidak dibutuhkan client
+function shouldExcludeNonGameFile(lower) {
+  // File editor/dokumen
   if (
     lower.endsWith(".psd") ||
     lower.endsWith(".xcf") ||
     lower.endsWith(".txt") ||
     lower.endsWith(".md") ||
-    lower.endsWith(".bak")
+    lower.endsWith(".bak") ||
+    lower.endsWith(".zip")
   ) {
     return true;
   }
+
+  // Jangan pernah buang aset game utama
+  if (
+    lower.endsWith(".png") ||
+    lower.endsWith(".json") ||
+    lower.endsWith(".mcmeta") ||
+    lower.endsWith(".properties")
+  ) {
+    return false;
+  }
+
+  // Folder raw/backup/unused/temp → buang SEMUA kecuali aset penting
   if (
     lower.includes("/raw/") ||
     lower.includes("/backup/") ||
     lower.includes("/unused/") ||
     lower.includes("/temp/")
   ) {
+    if (
+      lower.endsWith(".png") ||
+      lower.endsWith(".json") ||
+      lower.endsWith(".mcmeta")
+    ) {
+      return false;
+    }
     return true;
   }
+
   return false;
 }
 
-async function optimizePng(arrayBuffer, modeConfig, log) {
-  // convert ke Blob & ImageBitmap
-  const blob = new Blob([arrayBuffer], { type: "image/png" });
-
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(blob);
-  } catch (e) {
-    log(`Gagal membaca PNG, file disalin apa adanya.`);
-    return arrayBuffer; // fallback: tidak diubah
+async function loadImageFromBlob(blob) {
+  // Browser modern: pakai createImageBitmap
+  if (typeof createImageBitmap === "function") {
+    return await createImageBitmap(blob);
   }
 
-  const origWidth = bitmap.width;
-  const origHeight = bitmap.height;
+  // Fallback: pakai <img> + canvas
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+async function optimizePng(arrayBuffer, modeConfig, log) {
+  const blob = new Blob([arrayBuffer], { type: "image/png" });
+
+  let image;
+  try {
+    image = await loadImageFromBlob(blob);
+  } catch (e) {
+    log(`Gagal membaca PNG, file disalin apa adanya.`);
+    return arrayBuffer; // fallback
+  }
+
+  const origWidth = image.width;
+  const origHeight = image.height;
 
   if (!origWidth || !origHeight) {
     return arrayBuffer;
@@ -377,7 +440,13 @@ async function optimizePng(arrayBuffer, modeConfig, log) {
     targetHeight = Math.round(targetHeight * factor);
   }
 
-  // Jangan resize kalau beda-nya hampir nggak ada
+  const minSide = Math.min(targetWidth, targetHeight);
+  if (minSide < modeConfig.minSize) {
+    const factor = modeConfig.minSize / minSide;
+    targetWidth = Math.round(targetWidth * factor);
+    targetHeight = Math.round(targetHeight * factor);
+  }
+
   if (
     targetWidth <= 0 ||
     targetHeight <= 0 ||
@@ -394,13 +463,13 @@ async function optimizePng(arrayBuffer, modeConfig, log) {
   ctx.clearRect(0, 0, targetWidth, targetHeight);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
 
   const optimizedBlob = await new Promise((resolve) => {
     canvas.toBlob(
       (b) => resolve(b || blob),
       "image/png",
-      0.92 // kualitas standar
+      0.92
     );
   });
 
