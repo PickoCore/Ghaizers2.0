@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import JSZip from "jszip";
 
+// =========================
+//   MODE KONFIGURASI
+// =========================
 const MODES = {
   normal: {
     id: "normal",
     label: "Normal",
-    description:
-      "Kualitas seimbang, ukuran lebih kecil. Aman untuk kebanyakan device.",
+    description: "Seimbang, kualitas cukup bagus, pack tetap ringan.",
     scale: 0.85,
     maxSize: 512,
     minSize: 16,
@@ -15,8 +17,7 @@ const MODES = {
   extreme: {
     id: "extreme",
     label: "Extreme",
-    description:
-      "Kualitas turun cukup jauh, performa naik. Cocok untuk device mid–low.",
+    description: "Sangat hemat, cocok untuk device mid-low.",
     scale: 0.6,
     maxSize: 256,
     minSize: 8,
@@ -25,8 +26,7 @@ const MODES = {
   ultra: {
     id: "ultra",
     label: "Ultra Extreme",
-    description:
-      "Kualitas dikorbankan demi performa maksimal. Untuk device kentang / HP.",
+    description: "Paling ringan, untuk HP kentang atau Pojav lemah.",
     scale: 0.4,
     maxSize: 128,
     minSize: 4,
@@ -40,42 +40,50 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState(null);
   const [fileName, setFileName] = useState("");
-  const logRef = useRef(null);
-  const fileInputRef = useRef(null);
 
+  const logRef = useRef(null);
+
+  // =========================
+  //   LOGGING
+  // =========================
   const appendLog = (msg) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs((prev) => [...prev, `[${timestamp}] ${msg}`]);
+    const time = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev, `[${time}] ${msg}`]);
+
     setTimeout(() => {
       if (logRef.current) {
         logRef.current.scrollTop = logRef.current.scrollHeight;
       }
-    }, 0);
+    }, 10);
   };
 
+  // =========================
+  //   UPLOAD HANDLER
+  // =========================
   const onFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setFileName(file.name);
-    setSummary(null);
     setLogs([]);
+    setSummary(null);
+
     await handleOptimize(file);
   };
 
+  // =========================
+  //   MAIN OPTIMIZER
+  // =========================
   const handleOptimize = async (file) => {
+    appendLog(`Input file: ${file.name}`);
+    appendLog(`Mode: ${mode}`);
+
+    setIsProcessing(true);
     const modeConfig = MODES[mode];
 
     try {
-      setIsProcessing(true);
-      appendLog(
-        `File diterima: ${file.name} (${(file.size / (1024 * 1024)).toFixed(
-          2
-        )} MB)`
-      );
-      appendLog(`Mode optimize: ${modeConfig.label}`);
-
       const zip = await JSZip.loadAsync(file);
-      appendLog("Membaca isi ZIP...");
+      appendLog("ZIP dibaca.");
 
       const outZip = new JSZip();
       const entries = Object.values(zip.files);
@@ -90,72 +98,74 @@ export default function Home() {
       };
 
       for (const entry of entries) {
-        const name = entry.name;
-
         if (entry.dir) {
-          outZip.folder(name);
+          outZip.folder(entry.name);
           continue;
         }
 
-        stats.totalFiles++;
+        const name = entry.name;
         const lower = name.toLowerCase();
+        stats.totalFiles++;
 
-        // 1) Buang hanya file non-game (psd/txt/md/bak, dll)
+        // =========================
+        //  EXCLUDE FILE NON-GAME
+        // =========================
         if (shouldExcludeNonGameFile(lower)) {
           stats.removed++;
-          appendLog(`Dibuang (non-game file): ${name}`);
+          appendLog(`Dibuang (non-game): ${name}`);
           continue;
         }
 
-        // 2) PNG – SELALU dipertahankan, cuma di-resize
+        // =========================
+        //  PNG — SELALU DIJAGA
+        // =========================
         if (lower.endsWith(".png")) {
           stats.pngCount++;
-          appendLog(`Optimize image: ${name}`);
-          const arrayBuffer = await entry.async("arraybuffer");
-          const optimizedBuffer = await optimizePng(
-            arrayBuffer,
-            modeConfig,
-            appendLog
-          );
-          outZip.file(name, optimizedBuffer);
+          appendLog(`Optimize PNG: ${name}`);
+
+          const buffer = await entry.async("arraybuffer");
+          const out = await optimizePng(buffer, modeConfig, appendLog);
+
           stats.pngOptimized++;
+          outZip.file(name, out);
           continue;
         }
 
-        // 3) JSON – boleh di-minify, tidak pernah dihapus
+        // =========================
+        //  JSON — HANYA MINIFY
+        // =========================
         if (lower.endsWith(".json")) {
           stats.jsonCount++;
           const text = await entry.async("string");
-          if (modeConfig.minifyJson) {
-            try {
-              const obj = JSON.parse(text);
-              const minified = JSON.stringify(obj);
-              outZip.file(name, minified);
-              stats.jsonMinified++;
-              appendLog(`Minified JSON: ${name}`);
-            } catch (err) {
-              appendLog(`JSON invalid, tidak diubah: ${name}`);
-              outZip.file(name, text);
-            }
-          } else {
+
+          try {
+            const minified = JSON.stringify(JSON.parse(text));
+            stats.jsonMinified++;
+            outZip.file(name, minified);
+            appendLog(`JSON minified: ${name}`);
+          } catch {
             outZip.file(name, text);
+            appendLog(`JSON invalid (skip): ${name}`);
           }
           continue;
         }
 
-        // 4) File lain – disalin apa adanya
+        // =========================
+        //  FILE LAIN — COPY ORIGINAL
+        // =========================
         const content = await entry.async("arraybuffer");
         outZip.file(name, content);
       }
 
-      appendLog("Menyusun ZIP hasil optimize...");
+      appendLog("Menyusun ZIP...");
       const optimizedBlob = await outZip.generateAsync({
         type: "blob",
         compression: "DEFLATE",
         compressionOptions: { level: 9 }
       });
 
-      appendLog("Selesai! Menyiapkan download optimize_file.zip");
+      appendLog("Selesai ✔ File siap diunduh.");
+
       triggerDownload(optimizedBlob, "optimize_file.zip");
 
       setSummary({
@@ -164,15 +174,17 @@ export default function Home() {
         optimizedSize: optimizedBlob.size
       });
 
-      setIsProcessing(false);
-      appendLog("Proses selesai ✔");
-    } catch (err) {
-      console.error(err);
-      appendLog(`ERROR: ${err.message || "Terjadi kesalahan saat optimize."}`);
-      setIsProcessing(false);
+    } catch (e) {
+      console.error(e);
+      appendLog("ERROR: " + e.message);
     }
+
+    setIsProcessing(false);
   };
 
+  // =========================
+  //   RENDER UI
+  // =========================
   return (
     <div className="page">
       <div className="background-orbit" />
@@ -184,167 +196,84 @@ export default function Home() {
           <header className="header">
             <div>
               <h1>Minecraft Pack Optimizer</h1>
-              <p>Liquid glass UI • Client-side only • Vercel friendly</p>
+              <p>100% Client-Side • Aman • Vercel Friendly</p>
             </div>
-            <span className="badge">Beta</span>
+            <span className="badge">v1.2</span>
           </header>
 
           <section className="section">
-            <h2>1. Upload resource pack</h2>
-            <p className="section-sub">
-              Upload file <code>.zip</code> resource pack kamu. Proses optimize
-              berjalan di browser, server tidak menyentuh data sama sekali.
-            </p>
+            <h2>1. Upload Resource Pack</h2>
+            <p className="section-sub">Upload file ZIP sebelum optimasi.</p>
 
-            <div className="upload-area">
-              <input
-                type="file"
-                accept=".zip"
-                ref={fileInputRef}
-                onChange={onFileChange}
-                disabled={isProcessing}
-                className="hidden-input"
-                id="file-input"
-              />
-              <label
-                htmlFor="file-input"
-                className={`upload-label ${isProcessing ? "disabled" : ""}`}
-              >
-                <div className="upload-icon">⬆️</div>
-                <div>
-                  <div className="upload-title">
-                    {fileName || "Klik untuk memilih file .zip"}
-                  </div>
-                  <div className="upload-sub">
-                    Atau drag & drop ke sini (kalau environment kamu mendukung).
-                  </div>
-                </div>
-              </label>
-            </div>
+            <input
+              type="file"
+              accept=".zip"
+              id="inputFile"
+              className="hidden-input"
+              disabled={isProcessing}
+              onChange={onFileChange}
+            />
+
+            <label htmlFor="inputFile" className="upload-label">
+              <div className="upload-icon">⬆️</div>
+              <div>
+                {fileName || "Klik untuk pilih file ZIP"}
+              </div>
+            </label>
           </section>
 
           <section className="section">
-            <h2>2. Pilih mode optimize</h2>
-            <p className="section-sub">
-              Setiap mode mengubah resolusi & pixel image, serta meminify JSON
-              (kalau diaktifkan).
-            </p>
-
+            <h2>2. Pilih Mode</h2>
             <div className="mode-grid">
               {Object.values(MODES).map((m) => (
                 <button
                   key={m.id}
-                  className={`mode-card ${mode === m.id ? "mode-active" : ""}`}
-                  onClick={() => setMode(m.id)}
+                  className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
                   disabled={isProcessing}
+                  onClick={() => setMode(m.id)}
                 >
                   <div className="mode-title-row">
                     <span>{m.label}</span>
-                    {mode === m.id && <span className="mode-dot" />}
+                    {mode === m.id && <span className="mode-dot"></span>}
                   </div>
                   <p className="mode-desc">{m.description}</p>
-                  <ul className="mode-meta">
-                    <li>Scale: {Math.round(m.scale * 100)}%</li>
-                    <li>Max texture: {m.maxSize}px</li>
-                    <li>
-                      JSON: {m.minifyJson ? "Minified" : "Tidak di-minify"}
-                    </li>
-                  </ul>
                 </button>
               ))}
             </div>
           </section>
 
           <section className="section">
-            <div className="section-header-inline">
-              <h2>3. Console log</h2>
-              {isProcessing && (
-                <span className="processing-dot">Optimizing...</span>
-              )}
-            </div>
-            <p className="section-sub">
-              Semua langkah proses ditampilkan di sini. Kalau ada error, akan
-              muncul juga.
-            </p>
-
+            <h2>3. Console</h2>
             <div className="console" ref={logRef}>
-              {logs.length === 0 ? (
-                <div className="console-placeholder">
-                  Menunggu file diupload...
-                  <br />
-                  Setelah kamu upload, proses akan berjalan otomatis.
-                </div>
-              ) : (
-                logs.map((l, i) => (
-                  <div key={i} className="console-line">
-                    {l}
-                  </div>
-                ))
-              )}
+              {logs.map((l, i) => (
+                <div key={i} className="console-line">{l}</div>
+              ))}
             </div>
           </section>
 
           {summary && (
             <section className="section">
-              <h2>4. Hasil optimasi</h2>
-              <p className="section-sub">
-                Berikut ringkasan apa saja yang dioptimasi dari resource pack
-                kamu.
-              </p>
+              <h2>4. Hasil</h2>
+              <p className="section-sub">Ringkasan optimasi pack:</p>
 
               <div className="summary-grid">
-                <div className="summary-card">
-                  <div className="summary-label">Ukuran</div>
-                  <div className="summary-value">
-                    {(summary.originalSize / (1024 * 1024)).toFixed(2)} MB →{" "}
-                    {(summary.optimizedSize / (1024 * 1024)).toFixed(2)} MB
-                  </div>
-                  <div className="summary-extra">
-                    Penghematan{" "}
-                    {(
-                      (1 - summary.optimizedSize / summary.originalSize) *
-                      100
-                    ).toFixed(1)}
-                    %
-                  </div>
-                </div>
-                <div className="summary-card">
-                  <div className="summary-label">PNG</div>
-                  <div className="summary-value">
-                    {summary.pngOptimized} / {summary.pngCount} optimized
-                  </div>
-                  <div className="summary-extra">
-                    Resolusi & pixel diperkecil sesuai mode.
-                  </div>
-                </div>
-                <div className="summary-card">
-                  <div className="summary-label">JSON</div>
-                  <div className="summary-value">
-                    {summary.jsonMinified} / {summary.jsonCount} minified
-                  </div>
-                  <div className="summary-extra">
-                    Spasi & newline dihapus untuk mengurangi ukuran.
-                  </div>
-                </div>
-                <div className="summary-card">
-                  <div className="summary-label">File dibuang</div>
-                  <div className="summary-value">{summary.removed}</div>
-                  <div className="summary-extra">
-                    Hanya file non-esensial seperti PSD, TXT, dan backup.
-                  </div>
-                </div>
-              </div>
+                <Summary label="Ukuran"
+                  value={`${(summary.originalSize/1e6).toFixed(2)} MB → ${(summary.optimizedSize/1e6).toFixed(2)} MB`} />
 
-              <p className="section-sub">
-                File hasil optimasi sudah otomatis di-download dengan nama{" "}
-                <code>optimize_file.zip</code>. Jika ingin mengulang, upload
-                lagi file baru.
-              </p>
+                <Summary label="PNG"
+                  value={`${summary.pngOptimized} / ${summary.pngCount}`} />
+
+                <Summary label="JSON Minified"
+                  value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
+
+                <Summary label="File dibuang"
+                  value={summary.removed} />
+              </div>
             </section>
           )}
 
           <footer className="footer">
-            <span>Minecraft Pack Optimizer · Client-side · No server timeout</span>
+            <span>© 2025 Minecraft Pack Optimizer</span>
           </footer>
         </div>
       </main>
@@ -352,10 +281,24 @@ export default function Home() {
   );
 }
 
-// ===== Helpers =====
 
+// =========================
+//   UI KOMponen RINGKAS
+// =========================
+function Summary({ label, value }) {
+  return (
+    <div className="summary-card">
+      <div className="summary-label">{label}</div>
+      <div className="summary-value">{value}</div>
+    </div>
+  );
+}
+
+
+// =========================
+//   FILE NON-GAME FILTER
+// =========================
 function shouldExcludeNonGameFile(lower) {
-  // File editor/dokumen
   if (
     lower.endsWith(".psd") ||
     lower.endsWith(".xcf") ||
@@ -363,21 +306,15 @@ function shouldExcludeNonGameFile(lower) {
     lower.endsWith(".md") ||
     lower.endsWith(".bak") ||
     lower.endsWith(".zip")
-  ) {
-    return true;
-  }
+  ) return true;
 
-  // Jangan pernah buang aset game utama
   if (
     lower.endsWith(".png") ||
     lower.endsWith(".json") ||
     lower.endsWith(".mcmeta") ||
     lower.endsWith(".properties")
-  ) {
-    return false;
-  }
+  ) return false;
 
-  // Folder raw/backup/unused/temp → buang SEMUA kecuali aset penting
   if (
     lower.includes("/raw/") ||
     lower.includes("/backup/") ||
@@ -388,104 +325,128 @@ function shouldExcludeNonGameFile(lower) {
       lower.endsWith(".png") ||
       lower.endsWith(".json") ||
       lower.endsWith(".mcmeta")
-    ) {
-      return false;
-    }
+    ) return false;
+
     return true;
   }
 
   return false;
 }
 
+
+// =========================
+//   ANIMATED STRIP DETECTOR
+// =========================
+function detectAnimatedStrip(w, h) {
+  if (h <= w) return null;
+  const frames = h / w;
+  if (!Number.isInteger(frames)) return null;
+  if (frames < 2) return null;
+  return frames;
+}
+
+
+// =========================
+//   LOAD IMAGE (SAFE)
+// =========================
 async function loadImageFromBlob(blob) {
-  // Browser modern: pakai createImageBitmap
   if (typeof createImageBitmap === "function") {
     return await createImageBitmap(blob);
   }
 
-  // Fallback: pakai <img> + canvas
-  return new Promise((resolve, reject) => {
+  return new Promise((res, rej) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
+    img.onload = () => res(img);
+    img.onerror = rej;
     img.src = URL.createObjectURL(blob);
   });
 }
 
-async function optimizePng(arrayBuffer, modeConfig, log) {
-  const blob = new Blob([arrayBuffer], { type: "image/png" });
 
-  let image;
+// =========================
+//   PNG OPTIMIZER
+// =========================
+async function optimizePng(buffer, mode, log) {
+  const blob = new Blob([buffer], { type: "image/png" });
+  let img;
+
   try {
-    image = await loadImageFromBlob(blob);
-  } catch (e) {
-    log(`Gagal membaca PNG, file disalin apa adanya.`);
-    return arrayBuffer; // fallback
+    img = await loadImageFromBlob(blob);
+  } catch {
+    log("PNG gagal dibaca, skip.");
+    return buffer;
   }
 
-  const origWidth = image.width;
-  const origHeight = image.height;
+  const w0 = img.width;
+  const h0 = img.height;
 
-  if (!origWidth || !origHeight) {
-    return arrayBuffer;
+  const frames = detectAnimatedStrip(w0, h0);
+
+  // =========================
+  //   ANIMATED STRIP LOGIC
+  // =========================
+  let targetW = Math.round(w0 * mode.scale);
+
+  if (targetW > mode.maxSize) targetW = mode.maxSize;
+  if (targetW < mode.minSize) targetW = mode.minSize;
+
+  let targetH;
+
+  if (frames) {
+    targetH = targetW * frames;
+    log(`Animated Texture: ${frames} frames → ${targetW}x${targetH}`);
+  } else {
+    let tW = targetW;
+    let tH = Math.round(h0 * mode.scale);
+
+    const maxSide = Math.max(tW, tH);
+    if (maxSide > mode.maxSize) {
+      const f = mode.maxSize / maxSide;
+      tW = Math.round(tW * f);
+      tH = Math.round(tH * f);
+    }
+
+    const minSide = Math.min(tW, tH);
+    if (minSide < mode.minSize) {
+      const f = mode.minSize / minSide;
+      tW = Math.round(tW * f);
+      tH = Math.round(tH * f);
+    }
+
+    targetW = tW;
+    targetH = tH;
   }
 
-  let targetWidth = Math.round(origWidth * modeConfig.scale);
-  let targetHeight = Math.round(origHeight * modeConfig.scale);
-
-  const maxSide = Math.max(targetWidth, targetHeight);
-  if (maxSide > modeConfig.maxSize) {
-    const factor = modeConfig.maxSize / maxSide;
-    targetWidth = Math.round(targetWidth * factor);
-    targetHeight = Math.round(targetHeight * factor);
-  }
-
-  const minSide = Math.min(targetWidth, targetHeight);
-  if (minSide < modeConfig.minSize) {
-    const factor = modeConfig.minSize / minSide;
-    targetWidth = Math.round(targetWidth * factor);
-    targetHeight = Math.round(targetHeight * factor);
-  }
-
-  if (
-    targetWidth <= 0 ||
-    targetHeight <= 0 ||
-    (targetWidth === origWidth && targetHeight === origHeight)
-  ) {
-    return arrayBuffer;
-  }
+  if (targetW === w0 && targetH === h0) return buffer;
 
   const canvas = document.createElement("canvas");
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
+  canvas.width = targetW;
+  canvas.height = targetH;
   const ctx = canvas.getContext("2d");
 
-  ctx.clearRect(0, 0, targetWidth, targetHeight);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+  ctx.drawImage(img, 0, 0, targetW, targetH);
 
-  const optimizedBlob = await new Promise((resolve) => {
-    canvas.toBlob(
-      (b) => resolve(b || blob),
-      "image/png",
-      0.92
-    );
-  });
+  const outBlob = await new Promise((resolve) =>
+    canvas.toBlob((b) => resolve(b || blob), "image/png", 0.92)
+  );
 
-  const optimizedArrayBuffer = await optimizedBlob.arrayBuffer();
-  return optimizedArrayBuffer;
+  return await outBlob.arrayBuffer();
 }
 
-function triggerDownload(blob, fileName) {
+
+// =========================
+//   DOWNLOAD
+// =========================
+function triggerDownload(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = fileName;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 1000);
+  document.body.removeChild(a);
+
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
