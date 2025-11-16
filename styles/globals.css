@@ -334,3 +334,54 @@ body {
   opacity: .6;
   font-size: 13px;
 }
+
+/* ================
+   SLIDER RESOLUSI
+==================*/
+.slider-row {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.3);
+  outline: none;
+}
+
+/* Chrome/Safari */
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  border: 2px solid white;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.7);
+  cursor: pointer;
+}
+
+/* Firefox */
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  border: 2px solid white;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.7);
+  cursor: pointer;
+}
+
+.slider-value {
+  width: 52px;
+  text-align: right;
+  font-size: 13px;
+  opacity: 0.8;
+}
