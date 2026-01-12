@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 
 /* =========================
@@ -39,7 +39,7 @@ const MODES = {
    (dievaluasi berurutan)
 ========================= */
 const BASE_POLICIES = [
-  // GUI & FONT → jaga ketajaman (nearest), minimum agak tinggi
+  // GUI & FONT → jaga ketajaman
   { pattern: /textures\/gui\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0 },
   { pattern: /textures\/font\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0, skipResize: true },
 
@@ -53,11 +53,13 @@ const BASE_POLICIES = [
   // Entity/mob → moderat
   { pattern: /textures\/entity\//, scaleMul: 0.85 },
 
+  // Particles → agresif (biasanya kecil & banyak)
+  { pattern: /textures\/particle\//, scaleMul: 0.75, smoothing: "nearest" },
+
   // Default
   { pattern: /.*/, scaleMul: 1.0 }
 ];
 
-/* ========= HELPER POLICY (pure function) ========= */
 function getPolicyForPath(lowerPath, dynamicStripPaths) {
   // 1) dynamic enforceStrip dari log (prioritas tertinggi)
   if (Array.isArray(dynamicStripPaths)) {
@@ -76,7 +78,6 @@ function getPolicyForPath(lowerPath, dynamicStripPaths) {
     }
   }
 
-  // fallback
   return { scaleMul: 1.0 };
 }
 
@@ -102,7 +103,6 @@ function shouldExcludeNonGameFile(lower) {
   )
     return false;
 
-  // folder khusus: buang non-aset
   if (
     lower.includes("/raw/") ||
     lower.includes("/backup/") ||
@@ -158,142 +158,64 @@ function uniqueLower(arr) {
   return out;
 }
 
+/* ========== PNG IHDR FAST SIZE PARSE (tanpa decode) ==========
+   PNG signature 8 bytes, lalu chunk: [len(4)][type(4)] => IHDR harus pertama
+   IHDR data: width(4) height(4) ... big endian
+   Spec: IHDR width/height 4-byte integers. 4
+=============================================================== */
+function readPngIHDRSize(buffer) {
+  try {
+    const u8 = new Uint8Array(buffer);
+    if (u8.length < 24) return null;
+
+    // signature 8 bytes
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    for (let i = 0; i < 8; i++) if (u8[i] !== sig[i]) return null;
+
+    // chunk length (4) at 8..11, type at 12..15
+    const type =
+      String.fromCharCode(u8[12]) +
+      String.fromCharCode(u8[13]) +
+      String.fromCharCode(u8[14]) +
+      String.fromCharCode(u8[15]);
+    if (type !== "IHDR") return null;
+
+    // IHDR data starts at 16
+    const dv = new DataView(buffer);
+    const w = dv.getUint32(16, false);
+    const h = dv.getUint32(20, false);
+    if (!w || !h) return null;
+    return { w, h };
+  } catch {
+    return null;
+  }
+}
+
 /* ========== ANIMATED STRIP DETECTOR ========== */
 function detectAnimatedStrip(width, height) {
+  if (!width || !height) return null;
   if (height <= width) return null;
   const frames = height / width;
   if (!Number.isInteger(frames) || frames < 2) return null;
   return frames;
 }
 
-/* ========== LOAD IMAGE (aman di browser) ========== */
-async function loadImageFromBlob(blob) {
-  if (typeof createImageBitmap === "function") {
-    return await createImageBitmap(blob);
-  }
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
-    img.src = URL.createObjectURL(blob);
-  });
-}
-
-/* ========== OPTIMIZE PNG (policy aware + SIZE GUARD) ========== */
-async function optimizePng(buffer, modeConfig, log) {
-  const originalSize = buffer.byteLength;
-  const blob = new Blob([buffer], { type: "image/png" });
-
-  let image;
-  try {
-    image = await loadImageFromBlob(blob);
-  } catch (e) {
-    log("PNG gagal dibaca, disalin apa adanya.");
-    return buffer;
-  }
-
-  const w0 = image.width;
-  const h0 = image.height;
-  if (!w0 || !h0) return buffer;
-
-  const { policy = {}, scale, minSize, maxSize, preservePixelArt } = modeConfig;
-
-  const frames = detectAnimatedStrip(w0, h0);
-  const baseScale = Math.max(0.01, scale) * (policy.scaleMul || 1.0);
-
-  let tW = Math.round(w0 * baseScale);
-  const minAllowed = Math.max(minSize, policy.minSize || 0);
-  tW = Math.min(Math.max(tW, minAllowed), maxSize);
-
-  let tH;
-
-  if (frames || policy.enforceStrip) {
-    const fCount = frames || Math.max(1, Math.round(h0 / w0));
-    tH = tW * fCount;
-
-    if (policy.maxHeight && tH > policy.maxHeight) {
-      const fac = policy.maxHeight / tH;
-      tW = Math.max(1, Math.round(tW * fac));
-      tH = tW * fCount;
-    }
-    log(
-      `Animated strip${policy.enforceStrip && !frames ? " (enforced)" : ""}: ${w0}x${h0} → ${tW}x${tH}`
-    );
-  } else {
-    let hScaled = Math.round(h0 * baseScale);
-
-    let maxSide = Math.max(tW, hScaled);
-    if (maxSide > maxSize) {
-      const fac = maxSize / maxSide;
-      tW = Math.round(tW * fac);
-      hScaled = Math.round(hScaled * fac);
-    }
-
-    let minSide = Math.min(tW, hScaled);
-    if (minSide < minAllowed) {
-      const fac = minAllowed / minSide;
-      tW = Math.round(tW * fac);
-      hScaled = Math.round(hScaled * fac);
-    }
-    tH = hScaled;
-  }
-
-  // kalau resolusi akhirnya sama persis, nggak usah re-encode
-  if (tW <= 0 || tH <= 0 || (tW === w0 && tH === h0)) {
-    return buffer;
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = tW;
-  canvas.height = tH;
-  const ctx = canvas.getContext("2d");
-
-  const smoothing = policy.smoothing || (preservePixelArt ? "nearest" : "smooth");
-  ctx.imageSmoothingEnabled = smoothing !== "nearest";
-  ctx.imageSmoothingQuality = smoothing === "nearest" ? "low" : "high";
-
-  ctx.clearRect(0, 0, tW, tH);
-  ctx.drawImage(image, 0, 0, tW, tH);
-
-  const outBlob = await new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b || blob), "image/png", 0.92)
-  );
-
-  if (!outBlob) {
-    log("Canvas gagal menghasilkan PNG, pakai file asli.");
-    return buffer;
-  }
-
-  const outBuffer = await outBlob.arrayBuffer();
-  const newSize = outBuffer.byteLength;
-
-  // SIZE GUARD: kalau hasil ≥ asli, pakai asli
-  if (newSize >= originalSize) {
-    log(`PNG hasil lebih besar / sama (${originalSize} → ${newSize} bytes), pakai file asli.`);
-    return buffer;
-  }
-
-  log(`PNG shrink: ${originalSize} → ${newSize} bytes`);
-  return outBuffer;
-}
-
 /* ========== SAFE OGG OPTIMIZER ==========
-   - Hapus ID3v2 di awal (jika ada)
-   - Hapus ID3v1 di akhir (TAG 128 byte, jika ada)
-   - Hapus trailing 0x00 di akhir file
-   Tidak mengubah audio stream utama
+   - Hapus ID3v2 awal ("ID3")
+   - Hapus ID3v1 akhir ("TAG" 128 byte)
+   - Hapus trailing 0x00
 ======================================== */
-async function optimizeOggSafe(buffer, log, name) {
+async function optimizeOggSafe(buffer) {
   try {
     const bytes = new Uint8Array(buffer);
     const len = bytes.length;
-    if (len < 16) return buffer;
+    if (len < 16) return { out: buffer, changed: false };
 
     let start = 0;
     let end = len;
     let changed = false;
 
-    // ID3v2 di awal ("ID3")
+    // ID3v2
     if (len >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
       const size =
         ((bytes[6] & 0x7f) << 21) |
@@ -307,55 +229,43 @@ async function optimizeOggSafe(buffer, log, name) {
       }
     }
 
-    // ID3v1 di akhir ("TAG" 128 byte terakhir)
+    // ID3v1
     if (end - start > 128) {
       const tagPos = end - 128;
       if (
-        bytes[tagPos] === 0x54 && // 'T'
-        bytes[tagPos + 1] === 0x41 && // 'A'
-        bytes[tagPos + 2] === 0x47 // 'G'
+        bytes[tagPos] === 0x54 &&
+        bytes[tagPos + 1] === 0x41 &&
+        bytes[tagPos + 2] === 0x47
       ) {
         end = tagPos;
         changed = true;
       }
     }
 
-    // Hapus trailing 0x00 (padding)
     while (end > start && bytes[end - 1] === 0x00) {
       end--;
       changed = true;
     }
 
-    if (!changed || end <= start) {
-      return buffer;
-    }
+    if (!changed || end <= start) return { out: buffer, changed: false };
 
     const trimmed = bytes.subarray(start, end);
     const out = new Uint8Array(trimmed.length);
     out.set(trimmed);
-
-    log(`OGG safe optimize: ${name} (${len} → ${out.length} bytes)`);
-    return out.buffer;
-  } catch (e) {
-    log(`OGG optimize error, pakai original: ${e.message}`);
-    return buffer;
+    return { out: out.buffer, changed: true };
+  } catch {
+    return { out: buffer, changed: false };
   }
 }
 
 /* ========== BUILD pack.png DARI ICON ========== */
-async function buildPackIcon(file, log) {
+async function buildPackIcon(file) {
   const buf = await file.arrayBuffer();
   const blob = new Blob([buf], { type: file.type || "image/png" });
 
-  let img;
-  try {
-    img = await loadImageFromBlob(blob);
-  } catch {
-    log("Icon gagal dibaca, pack.png tidak diubah.");
-    return buf;
-  }
-
+  const img = await createImageBitmap(blob);
   const target = 128;
+
   const canvas = document.createElement("canvas");
   canvas.width = target;
   canvas.height = target;
@@ -375,26 +285,27 @@ async function buildPackIcon(file, log) {
   const outBlob = await new Promise((resolve) =>
     canvas.toBlob((b) => resolve(b || blob), "image/png", 0.92)
   );
-  log("pack.png berhasil dibuat dari icon.");
   return await outBlob.arrayBuffer();
 }
 
-/* ========== SHA-1 dari Blob (Web Crypto) ========== */
+/* ========== SHA-1 dari Blob (WebCrypto) ==========
+   WebCrypto subtle.digest tersedia di Chrome (secure origin). 5
+================================================== */
 async function sha1HexFromBlob(blob) {
-  if (typeof window === "undefined" || !window.crypto || !window.crypto.subtle) return null;
-  const ab = await blob.arrayBuffer();
-  const hash = await window.crypto.subtle.digest("SHA-1", ab);
-  const bytes = new Uint8Array(hash);
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, "0");
+  try {
+    if (typeof window === "undefined" || !window.crypto?.subtle) return null;
+    const ab = await blob.arrayBuffer();
+    const hash = await window.crypto.subtle.digest("SHA-1", ab);
+    const bytes = new Uint8Array(hash);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
+    return hex;
+  } catch {
+    return null;
   }
-  return hex;
 }
 
-/* ========== DOWNLOAD ==========
-   (link temporary + revoke)
-============================== */
+/* ========== DOWNLOAD ========= */
 function triggerDownload(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -406,9 +317,174 @@ function triggerDownload(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-/* ==========================================
-   KOMPONEN UTAMA (React / Next.js page)
-========================================== */
+/* =========================
+   WORKER POOL (PNG resize)
+   - OffscreenCanvas di Worker (supported) 6
+========================= */
+function makePngWorkerURL() {
+  const workerCode = `
+    self.onmessage = async (ev) => {
+      const msg = ev.data;
+      if (!msg || msg.type !== "png") return;
+
+      const { id, buffer, w0, h0, tW, tH, smoothing, sizeGuard } = msg;
+
+      try {
+        // quick bail
+        if (!buffer || !tW || !tH || (tW === w0 && tH === h0)) {
+          self.postMessage({ id, ok: true, out: buffer, changed: false }, buffer ? [buffer] : []);
+          return;
+        }
+
+        const originalSize = buffer.byteLength || 0;
+
+        const blob = new Blob([buffer], { type: "image/png" });
+        const bmp = await createImageBitmap(blob);
+
+        const canvas = new OffscreenCanvas(tW, tH);
+        const ctx = canvas.getContext("2d");
+
+        const nearest = smoothing === "nearest";
+        ctx.imageSmoothingEnabled = !nearest;
+        ctx.imageSmoothingQuality = nearest ? "low" : "high";
+
+        ctx.clearRect(0, 0, tW, tH);
+        ctx.drawImage(bmp, 0, 0, tW, tH);
+
+        // convert to blob, then to arraybuffer
+        const outBlob = await canvas.convertToBlob({ type: "image/png" });
+        const outBuf = await outBlob.arrayBuffer();
+
+        // size guard: kalau lebih gede / sama, balikin original
+        if (sizeGuard && outBuf.byteLength >= originalSize) {
+          self.postMessage({ id, ok: true, out: buffer, changed: false, guarded: true }, [buffer]);
+          return;
+        }
+
+        self.postMessage({ id, ok: true, out: outBuf, changed: true, guarded: false }, [outBuf]);
+      } catch (e) {
+        // fallback: return original
+        try {
+          self.postMessage({ id, ok: false, error: String(e?.message || e), out: buffer, changed: false }, [buffer]);
+        } catch {
+          self.postMessage({ id, ok: false, error: String(e?.message || e), out: null, changed: false });
+        }
+      }
+    };
+  `;
+  const blob = new Blob([workerCode], { type: "application/javascript" });
+  return URL.createObjectURL(blob);
+}
+
+function createWorkerPool(size) {
+  const url = makePngWorkerURL();
+  const workers = [];
+  const free = [];
+  const pending = new Map();
+  let seq = 0;
+
+  function spawn() {
+    const w = new Worker(url);
+    w.onmessage = (ev) => {
+      const { id, ok, out, changed, guarded, error } = ev.data || {};
+      const cb = pending.get(id);
+      if (cb) {
+        pending.delete(id);
+        cb.resolve({ ok, out, changed, guarded, error });
+      }
+      free.push(w);
+      pump();
+    };
+    w.onerror = (err) => {
+      // reject all pending? keep simple: mark worker free
+      free.push(w);
+      pump();
+    };
+    workers.push(w);
+    free.push(w);
+  }
+
+  for (let i = 0; i < size; i++) spawn();
+
+  const queue = [];
+  function pump() {
+    while (free.length > 0 && queue.length > 0) {
+      const w = free.pop();
+      const job = queue.shift();
+      pending.set(job.id, job);
+      // transfer buffer
+      w.postMessage(job.payload, [job.payload.buffer]);
+    }
+  }
+
+  function runPngJob(payload) {
+    const id = ++seq;
+    return new Promise((resolve, reject) => {
+      queue.push({ id, resolve, reject, payload: { ...payload, id, type: "png" } });
+      pump();
+    });
+  }
+
+  function destroy() {
+    for (const w of workers) w.terminate();
+    URL.revokeObjectURL(url);
+  }
+
+  return { runPngJob, destroy };
+}
+
+/* =========================
+   TARGET SIZE CALC (tanpa decode)
+========================= */
+function computeTargetSize({ w0, h0, policy, modeConfig }) {
+  const { scale, minSize, maxSize, preservePixelArt } = modeConfig;
+
+  const frames = detectAnimatedStrip(w0, h0);
+  const baseScale = Math.max(0.01, scale) * (policy.scaleMul || 1.0);
+
+  let tW = Math.round(w0 * baseScale);
+  const minAllowed = Math.max(minSize, policy.minSize || 0);
+  tW = Math.min(Math.max(tW, minAllowed), maxSize);
+
+  let tH;
+
+  if (frames || policy.enforceStrip) {
+    // kalau enforceStrip tapi frames null, jangan nebak ngawur:
+    // fallback aman: pakai ratio existing (round) tapi tetep menjaga divisible
+    const fCount = frames || Math.max(1, Math.round(h0 / w0));
+    tH = tW * fCount;
+
+    if (policy.maxHeight && tH > policy.maxHeight) {
+      const fac = policy.maxHeight / tH;
+      tW = Math.max(1, Math.round(tW * fac));
+      tH = tW * fCount;
+    }
+  } else {
+    let hScaled = Math.round(h0 * baseScale);
+
+    let maxSide = Math.max(tW, hScaled);
+    if (maxSide > maxSize) {
+      const fac = maxSize / maxSide;
+      tW = Math.round(tW * fac);
+      hScaled = Math.round(hScaled * fac);
+    }
+
+    let minSide = Math.min(tW, hScaled);
+    if (minSide < minAllowed) {
+      const fac = minAllowed / minSide;
+      tW = Math.round(tW * fac);
+      hScaled = Math.round(hScaled * fac);
+    }
+    tH = hScaled;
+  }
+
+  const smoothing = policy.smoothing || (preservePixelArt ? "nearest" : "smooth");
+  return { tW, tH, smoothing };
+}
+
+/* =========================
+   UI COMPONENTS
+========================= */
 function Summary({ label, value }) {
   return (
     <div className="summary-card">
@@ -419,11 +495,13 @@ function Summary({ label, value }) {
 }
 
 export default function Home() {
-  /* ========= STATE UI ========= */
   const [mode, setMode] = useState("normal");
   const [resolutionPercent, setResolutionPercent] = useState(100); // 40..120
   const [preservePixelArt, setPreservePixelArt] = useState(true);
-  const [optimizeOgg, setOptimizeOgg] = useState(true); // safe mode OGG
+  const [optimizeOgg, setOptimizeOgg] = useState(true);
+
+  const [zipCompressionLevel, setZipCompressionLevel] = useState(6); // default cepat (level 9 lambat)
+  const [workerCount, setWorkerCount] = useState(0); // auto
 
   const [logs, setLogs] = useState([]);
   const logRef = useRef(null);
@@ -440,19 +518,48 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState(null);
 
-  // daftar path (substring) dari log Pojav yang perlu enforceStrip
-  const [dynamicStripPaths, setDynamicStripPaths] = useState([]); // array<string lowercased>
+  const [dynamicStripPaths, setDynamicStripPaths] = useState([]);
 
-  /* ========= LOGGING ========= */
-  const appendLog = (msg) => {
-    const time = new Date().toLocaleTimeString();
-    setLogs((prev) => [...prev, `[${time}] ${msg}`]);
+  // progress
+  const [progress, setProgress] = useState({ done: 0, total: 0, etaSec: null });
+
+  // log batching
+  const logBufferRef = useRef([]);
+  const flushTimerRef = useRef(null);
+
+  const computedWorkerCount = useMemo(() => {
+    const hc = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4;
+    // chrome android: 2-4 worker cukup, jangan kebanyakan biar ga overheat
+    const suggested = Math.max(2, Math.min(4, Math.floor(hc / 2) || 2));
+    return workerCount > 0 ? workerCount : suggested;
+  }, [workerCount]);
+
+  const flushLogs = () => {
+    const buf = logBufferRef.current;
+    if (!buf.length) return;
+    setLogs((prev) => [...prev, ...buf.splice(0, buf.length)]);
     setTimeout(() => {
-      if (logRef.current) {
-        logRef.current.scrollTop = logRef.current.scrollHeight;
-      }
+      if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
     }, 10);
   };
+
+  const appendLog = (msg) => {
+    const time = new Date().toLocaleTimeString();
+    logBufferRef.current.push(`[${time}] ${msg}`);
+    if (!flushTimerRef.current) {
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null;
+        flushLogs();
+      }, 250);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    };
+  }, []);
 
   /* ========= INPUT: PACK ========= */
   const onMainFileChange = async (e) => {
@@ -463,6 +570,9 @@ export default function Home() {
     setFileName(f.name);
     setSummary(null);
     setLogs([]);
+    logBufferRef.current = [];
+    setProgress({ done: 0, total: 0, etaSec: null });
+
     setMcmetaText("");
     setMcmetaLoaded(false);
     setMcmetaError("");
@@ -479,7 +589,7 @@ export default function Home() {
     appendLog(`Icon pack dipilih: ${f.name}`);
   };
 
-  /* ========= INPUT: LOG POJAV (Auto-Fix) ========= */
+  /* ========= INPUT: LOG POJAV ========= */
   const onLogFileChange = async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -498,7 +608,7 @@ export default function Home() {
     }
   };
 
-  /* ========= BACA pack.mcmeta dari ZIP ========= */
+  /* ========= BACA pack.mcmeta ========= */
   const inspectZipForMcmeta = async (f) => {
     try {
       appendLog("Membaca pack.mcmeta dari ZIP...");
@@ -520,7 +630,6 @@ export default function Home() {
       setMcmetaError("");
       appendLog("pack.mcmeta berhasil dibaca. Kamu bisa mengeditnya.");
     } catch (e) {
-      console.error(e);
       setMcmetaLoaded(false);
       setMcmetaText("");
       setMcmetaError("Gagal membaca pack.mcmeta");
@@ -541,17 +650,22 @@ export default function Home() {
     const modeConfig = {
       ...baseMode,
       scale: effectiveScale,
-      preservePixelArt // pass ke optimizer
+      preservePixelArt
     };
 
     appendLog(`Mode: ${baseMode.label}`);
-    appendLog(
-      `Scale efektif: ${(effectiveScale * 100).toFixed(0)}% (slider ${resolutionPercent}%)`
-    );
-    appendLog("PNG Size Guard aktif — PNG tidak akan diganti jika hasil encode lebih besar.");
+    appendLog(`Scale efektif: ${(effectiveScale * 100).toFixed(0)}% (slider ${resolutionPercent}%)`);
+    appendLog(`PNG precheck: IHDR parse aktif (skip decode kalau ga perlu resize).`);
+    appendLog(`Workers: ${computedWorkerCount} (PNG resize off-main-thread)`);
+    appendLog(`ZIP compression level: ${zipCompressionLevel} (6 = cepat, 9 = paling kecil tapi lambat)`);
+    appendLog(`JSZip: typed-array flow dipakai untuk performa. 7`);
 
     setIsProcessing(true);
     setSummary(null);
+    setProgress({ done: 0, total: 0, etaSec: null });
+
+    const pool = createWorkerPool(computedWorkerCount);
+    const t0 = performance.now();
 
     try {
       const zip = await JSZip.loadAsync(file);
@@ -564,6 +678,7 @@ export default function Home() {
         totalFiles: 0,
         pngCount: 0,
         pngOptimized: 0,
+        pngSkippedByIHDR: 0,
         jsonCount: 0,
         jsonMinified: 0,
         removed: 0,
@@ -571,8 +686,27 @@ export default function Home() {
         oggOptimized: 0
       };
 
+      // set progress total (count files that are not dirs)
+      const totalToProcess = entries.filter((e) => !e.dir).length;
+      setProgress({ done: 0, total: totalToProcess, etaSec: null });
+
+      let done = 0;
+      const updateProgress = () => {
+        done++;
+        const elapsed = (performance.now() - t0) / 1000;
+        const rate = done / Math.max(0.001, elapsed);
+        const left = Math.max(0, totalToProcess - done);
+        const etaSec = rate > 0 ? Math.round(left / rate) : null;
+        // throttle UI updates
+        if (done % 20 === 0 || done === totalToProcess) {
+          setProgress({ done, total: totalToProcess, etaSec });
+        }
+      };
+
+      // process sequential JSZip reads, but PNG heavy work parallel via workers
       for (let idx = 0; idx < entries.length; idx++) {
         const entry = entries[idx];
+
         if (entry.dir) {
           outZip.folder(entry.name);
           continue;
@@ -582,14 +716,14 @@ export default function Home() {
         const lower = name.toLowerCase();
         stats.totalFiles++;
 
-        // Buang hanya file non-game
         if (shouldExcludeNonGameFile(lower)) {
           stats.removed++;
           appendLog(`Dibuang (non-game): ${name}`);
+          updateProgress();
           continue;
         }
 
-        // pack.mcmeta → pakai edit user jika ada
+        // pack.mcmeta
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
           const original = await entry.async("string");
@@ -606,64 +740,122 @@ export default function Home() {
               outZip.file(name, minified);
               stats.jsonMinified++;
               appendLog("pack.mcmeta di-minify.");
-            } catch (e) {
+            } catch {
               outZip.file(name, toWrite);
               appendLog("pack.mcmeta bukan JSON valid, ditulis apa adanya.");
             }
           } else {
             outZip.file(name, toWrite);
           }
+
+          updateProgress();
           continue;
         }
 
-        // .ogg — optimisasi SAFE (tanpa re-encode)
+        // OGG safe
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
 
           if (optimizeOgg) {
-            const outBuf = await optimizeOggSafe(buf, appendLog, name);
-            if (outBuf !== buf) stats.oggOptimized++;
-            outZip.file(name, outBuf);
-            appendLog(`Optimize OGG (safe): ${name}`);
+            const { out, changed } = await optimizeOggSafe(buf);
+            if (changed) {
+              stats.oggOptimized++;
+              appendLog(`OGG safe optimized: ${name} (${buf.byteLength} → ${out.byteLength} bytes)`);
+            } else {
+              appendLog(`OGG copy (no change): ${name}`);
+            }
+            outZip.file(name, out);
           } else {
             outZip.file(name, buf);
-            appendLog(`Copy OGG (no optimize): ${name}`);
+            appendLog(`OGG copy (optimize off): ${name}`);
           }
 
+          updateProgress();
           continue;
         }
 
-        // PNG — resize (animated strip aman via policy + detector)
+        // PNG (IHDR precheck + worker resize)
         if (lower.endsWith(".png")) {
           stats.pngCount++;
+
           const policy = getPolicyForPath(lower, dynamicStripPaths);
 
-          // global toggle preserve pixel art
-          if (!preservePixelArt && policy.smoothing === "nearest") {
-            policy.smoothing = "smooth";
-          }
-
-          appendLog(`Optimize PNG: ${name}${policy.skip ? " [SKIP]" : ""}`);
-
-          const buf = await entry.async("arraybuffer");
-          let outBuf;
+          // preservePixelArt toggle global
+          if (!preservePixelArt && policy.smoothing === "nearest") policy.smoothing = "smooth";
 
           if (policy.skip) {
-            outBuf = buf; // simpan apa adanya
-          } else if (policy.skipResize) {
-            appendLog(`Skip resize (policy): ${name}`);
-            outBuf = buf;
-          } else {
-            outBuf = await optimizePng(buf, { ...modeConfig, policy }, appendLog);
+            const buf = await entry.async("arraybuffer");
+            outZip.file(name, buf);
+            appendLog(`PNG skip (policy): ${name}`);
+            updateProgress();
+            continue;
           }
 
-          outZip.file(name, outBuf);
-          if (!policy.skip && !policy.skipResize && outBuf !== buf) stats.pngOptimized++;
+          if (policy.skipResize) {
+            const buf = await entry.async("arraybuffer");
+            outZip.file(name, buf);
+            appendLog(`PNG skip resize (policy): ${name}`);
+            updateProgress();
+            continue;
+          }
+
+          // read buffer once (typed array path)
+          const buf = await entry.async("arraybuffer");
+
+          // micro-early skip: super tiny file (likely no benefit)
+          if (buf.byteLength < 2048) {
+            outZip.file(name, buf);
+            stats.pngSkippedByIHDR++;
+            appendLog(`PNG tiny skip (<2KB): ${name}`);
+            updateProgress();
+            continue;
+          }
+
+          const sz = readPngIHDRSize(buf);
+          if (!sz) {
+            // cannot parse, fallback copy
+            outZip.file(name, buf);
+            appendLog(`PNG IHDR parse gagal, copy: ${name}`);
+            updateProgress();
+            continue;
+          }
+
+          const { w: w0, h: h0 } = sz;
+          const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
+
+          // if same size => skip without decode
+          if (tW === w0 && tH === h0) {
+            outZip.file(name, buf);
+            stats.pngSkippedByIHDR++;
+            updateProgress();
+            continue;
+          }
+
+          // do resize in worker (size guard true)
+          const res = await pool.runPngJob({
+            buffer: buf,
+            w0,
+            h0,
+            tW,
+            tH,
+            smoothing,
+            sizeGuard: true
+          });
+
+          if (res?.changed) {
+            stats.pngOptimized++;
+            appendLog(`PNG resized: ${name} (${w0}x${h0} → ${tW}x${tH}, ${buf.byteLength} → ${res.out.byteLength} bytes)`);
+          } else if (res?.guarded) {
+            appendLog(`PNG size-guard (hasil >= asli), keep original: ${name}`);
+          }
+
+          outZip.file(name, res?.out || buf);
+          updateProgress();
           continue;
         }
 
-        // JSON lain — minify
+        // JSON lain
         if (lower.endsWith(".json")) {
           stats.jsonCount++;
           const text = await entry.async("string");
@@ -681,29 +873,31 @@ export default function Home() {
           } else {
             outZip.file(name, text);
           }
+          updateProgress();
           continue;
         }
 
-        // Lain-lain — copy apa adanya
+        // lainnya copy
         const content = await entry.async("arraybuffer");
         outZip.file(name, content);
+        updateProgress();
       }
 
       // Override pack icon bila ada
       if (iconFile) {
         appendLog("Menambahkan / override pack.png dari icon upload...");
-        const iconBuffer = await buildPackIcon(iconFile, appendLog);
+        const iconBuffer = await buildPackIcon(iconFile);
         outZip.file("pack.png", iconBuffer);
       }
 
       appendLog("Menyusun ZIP hasil optimasi...");
+      // JSZip note: typed arrays & compression choice matters 8
       const optimizedBlob = await outZip.generateAsync({
         type: "blob",
         compression: "DEFLATE",
-        compressionOptions: { level: 9 }
+        compressionOptions: { level: Math.max(1, Math.min(9, zipCompressionLevel)) }
       });
 
-      // Hitung SHA-1 ZIP hasil (buat server.properties / ItemsAdder)
       const sha1 = await sha1HexFromBlob(optimizedBlob);
       if (sha1) appendLog(`SHA-1 hasil: ${sha1}`);
 
@@ -715,16 +909,21 @@ export default function Home() {
         originalSize: file.size,
         optimizedSize: optimizedBlob.size,
         sha1: sha1 || null,
-        dynamicStripCount: dynamicStripPaths.length
+        dynamicStripCount: dynamicStripPaths.length,
+        workers: computedWorkerCount,
+        compressionLevel: zipCompressionLevel
       });
 
       appendLog("Optimasi selesai.");
+      flushLogs();
+      setProgress({ done: totalToProcess, total: totalToProcess, etaSec: 0 });
     } catch (e) {
-      console.error(e);
       appendLog("ERROR: " + e.message);
+      flushLogs();
+    } finally {
+      pool.destroy();
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   /* ========= RENDER ========= */
@@ -739,12 +938,12 @@ export default function Home() {
           <header className="header">
             <div>
               <h1>Minecraft Pack Optimizer</h1>
-              <p>Client-side • Vercel friendly • Policy • Auto-Fix • SHA-1 • OGG Safe</p>
+              <p>Client-side • Chrome Android optimized • Workers • IHDR precheck • OGG Safe • SHA-1</p>
             </div>
-            <span className="badge">v1.8</span>
+            <span className="badge">v2.0</span>
           </header>
 
-          {/* 1. Upload pack */}
+          {/* Upload pack */}
           <section className="section">
             <h2>1. Upload Resource Pack</h2>
             <p className="section-sub">
@@ -768,7 +967,7 @@ export default function Home() {
             </label>
           </section>
 
-          {/* 2. Mode */}
+          {/* Mode */}
           <section className="section">
             <h2>2. Pilih Mode Optimasi</h2>
             <p className="section-sub">Mode menentukan karakter dasar optimasi.</p>
@@ -796,7 +995,7 @@ export default function Home() {
             </div>
           </section>
 
-          {/* 3. Slider Resolusi + Snap */}
+          {/* Slider resolusi */}
           <section className="section">
             <h2>3. Slider Resolusi</h2>
             <p className="section-sub">
@@ -817,35 +1016,29 @@ export default function Home() {
             </div>
 
             <div className="button-row" style={{ marginTop: 10 }}>
-              <button
-                className="primary-button"
-                onClick={() => setResolutionPercent(50)}
-                disabled={isProcessing}
-              >
-                ½ (50%)
+              <button className="primary-button" onClick={() => setResolutionPercent(40)} disabled={isProcessing}>
+                40% (min)
               </button>
-              <button
-                className="primary-button"
-                onClick={() => setResolutionPercent(25)}
-                disabled={isProcessing}
-              >
-                ¼ (25%)
+              <button className="primary-button" onClick={() => setResolutionPercent(60)} disabled={isProcessing}>
+                60%
               </button>
-              <button
-                className="primary-button"
-                onClick={() => setResolutionPercent(12)}
-                disabled={isProcessing}
-              >
-                ⅛ (12%)
+              <button className="primary-button" onClick={() => setResolutionPercent(80)} disabled={isProcessing}>
+                80%
+              </button>
+              <button className="primary-button" onClick={() => setResolutionPercent(100)} disabled={isProcessing}>
+                100%
+              </button>
+              <button className="primary-button" onClick={() => setResolutionPercent(120)} disabled={isProcessing}>
+                120% (max)
               </button>
             </div>
           </section>
 
-          {/* 4. Pixel Art */}
+          {/* Pixel art */}
           <section className="section">
             <h2>4. Pixel Art</h2>
             <p className="section-sub">
-              Jaga ketajaman GUI/font (nearest-neighbor untuk kategori terkait). Font rank kamu aman di semua mode.
+              Jaga ketajaman GUI/font (nearest). Font tetap di-skip resize by policy.
             </p>
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
               <input
@@ -858,12 +1051,11 @@ export default function Home() {
             </label>
           </section>
 
-          {/* 5. Sound Optimization (.ogg) */}
+          {/* OGG */}
           <section className="section">
             <h2>5. Sound Optimization (.ogg)</h2>
             <p className="section-sub">
               Safe mode: hanya menghapus metadata & padding kosong di file <code>.ogg</code>, tanpa re-encode audio.
-              Suara tidak berubah, tapi ukuran bisa sedikit lebih kecil.
             </p>
 
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -877,12 +1069,54 @@ export default function Home() {
             </label>
           </section>
 
-          {/* 6. Icon pack */}
+          {/* ZIP compression level */}
           <section className="section">
-            <h2>6. Icon Pack (pack.png)</h2>
+            <h2>6. ZIP Compression</h2>
             <p className="section-sub">
-              Upload gambar (PNG/JPG) untuk dijadikan icon pack (pack.png di root). Jika kosong, icon lama (kalau ada)
-              tetap dipakai.
+              Level <strong>6</strong> biasanya paling “worth it” (cepat). Level <strong>9</strong> paling kecil tapi bisa jauh lebih lama.
+            </p>
+
+            <div className="slider-row">
+              <input
+                type="range"
+                min="1"
+                max="9"
+                value={zipCompressionLevel}
+                onChange={(e) => setZipCompressionLevel(Number(e.target.value))}
+                className="slider"
+                disabled={isProcessing}
+              />
+              <div className="slider-value">level {zipCompressionLevel}</div>
+            </div>
+          </section>
+
+          {/* Worker count */}
+          <section className="section">
+            <h2>7. Workers (PNG resize)</h2>
+            <p className="section-sub">
+              Default auto: 2–4 worker (aman buat Chrome Android biar ga ngelag/overheat).
+            </p>
+            <div className="button-row" style={{ marginTop: 10 }}>
+              <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(0)}>
+                Auto ({computedWorkerCount})
+              </button>
+              <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(2)}>
+                2
+              </button>
+              <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(3)}>
+                3
+              </button>
+              <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(4)}>
+                4
+              </button>
+            </div>
+          </section>
+
+          {/* Icon pack */}
+          <section className="section">
+            <h2>8. Icon Pack (pack.png)</h2>
+            <p className="section-sub">
+              Upload gambar (PNG/JPG) untuk dijadikan icon pack (pack.png di root).
             </p>
 
             <input
@@ -896,22 +1130,18 @@ export default function Home() {
             <label htmlFor="iconFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
               <div className="upload-icon">🖼️</div>
               <div>
-                <div className="upload-title">
-                  {iconFile ? iconFile.name : "Klik untuk pilih gambar icon"}
-                </div>
+                <div className="upload-title">{iconFile ? iconFile.name : "Klik untuk pilih gambar icon"}</div>
                 <div className="upload-sub">
-                  Icon akan diresize ke <code>128×128</code> dan disimpan sebagai <code>pack.png</code>.
+                  Icon diresize ke <code>128×128</code> → disimpan sebagai <code>pack.png</code>.
                 </div>
               </div>
             </label>
           </section>
 
-          {/* 7. pack.mcmeta editor */}
+          {/* mcmeta editor */}
           <section className="section">
-            <h2>7. pack.mcmeta Editor</h2>
-            <p className="section-sub">
-              Edit konten <code>pack.mcmeta</code>. Jika tidak ada, bagian ini akan kosong.
-            </p>
+            <h2>9. pack.mcmeta Editor</h2>
+            <p className="section-sub">Edit konten <code>pack.mcmeta</code>.</p>
 
             {mcmetaError && (
               <p className="section-sub" style={{ color: "#f87171" }}>
@@ -934,12 +1164,11 @@ export default function Home() {
             )}
           </section>
 
-          {/* 8. Upload log Pojav (Auto-Fix) */}
+          {/* Pojav log */}
           <section className="section">
-            <h2>8. Pojav Log (Auto-Fix)</h2>
+            <h2>10. Pojav Log (Auto-Fix)</h2>
             <p className="section-sub">
-              Upload <code>latestlog.txt</code>. Path yang kena error “not multiple of frame size” akan otomatis
-              di-enforce strip untuk build berikutnya.
+              Upload <code>latestlog.txt</code>. Path “not multiple of frame size” akan di-enforce strip otomatis.
             </p>
             <input
               type="file"
@@ -952,7 +1181,7 @@ export default function Home() {
             <label htmlFor="logFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
               <div className="upload-icon">📄</div>
               <div>
-                <div className="upload-title">Klik untuk pilih file log Pojav (latestlog.txt)</div>
+                <div className="upload-title">Klik untuk pilih log Pojav (latestlog.txt)</div>
                 <div className="upload-sub">
                   Ditemukan: <strong>{dynamicStripPaths.length}</strong> path enforce-strip dari log.
                 </div>
@@ -960,7 +1189,27 @@ export default function Home() {
             </label>
           </section>
 
-          {/* Tombol Optimize */}
+          {/* Progress */}
+          <section className="section">
+            <h2>Progress</h2>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ flex: 1, height: 10, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%",
+                    background: "rgba(255,255,255,0.65)"
+                  }}
+                />
+              </div>
+              <div className="small-note" style={{ minWidth: 140, textAlign: "right" }}>
+                {progress.total ? `${progress.done}/${progress.total}` : "0/0"}{" "}
+                {progress.etaSec != null ? `• ETA ${progress.etaSec}s` : ""}
+              </div>
+            </div>
+          </section>
+
+          {/* Optimize button */}
           <section className="section">
             <div className="button-row">
               <button className="primary-button" onClick={handleOptimize} disabled={isProcessing || !file}>
@@ -999,24 +1248,15 @@ export default function Home() {
                   label="Ukuran"
                   value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`}
                 />
-                <Summary
-                  label="PNG"
-                  value={`${summary.pngOptimized} / ${summary.pngCount} dioptimasi`}
-                />
+                <Summary label="PNG" value={`${summary.pngOptimized} / ${summary.pngCount} resized`} />
+                <Summary label="PNG Skip (IHDR)" value={`${summary.pngSkippedByIHDR}`} />
                 {summary.oggCount > 0 && (
-                  <Summary
-                    label="Sound (.ogg)"
-                    value={`${summary.oggOptimized} / ${summary.oggCount} dioptimasi (safe)`}
-                  />
+                  <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount} optimized (safe)`} />
                 )}
-                <Summary
-                  label="JSON Minified"
-                  value={`${summary.jsonMinified} / ${summary.jsonCount}`}
-                />
-                <Summary
-                  label="File Non-Game Dibuang"
-                  value={summary.removed}
-                />
+                <Summary label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
+                <Summary label="File Non-Game Dibuang" value={summary.removed} />
+                <Summary label="Workers" value={summary.workers} />
+                <Summary label="ZIP level" value={summary.compressionLevel} />
                 {summary.sha1 && (
                   <Summary
                     label="SHA-1 ZIP"
@@ -1026,10 +1266,7 @@ export default function Home() {
                         <button
                           className="primary-button"
                           style={{ marginLeft: 8, padding: "4px 8px", fontSize: 12 }}
-                          onClick={() =>
-                            navigator.clipboard &&
-                            navigator.clipboard.writeText(summary.sha1)
-                          }
+                          onClick={() => navigator.clipboard?.writeText(summary.sha1)}
                         >
                           Copy
                         </button>
@@ -1037,28 +1274,20 @@ export default function Home() {
                     }
                   />
                 )}
-                {summary.dynamicStripCount != null && (
-                  <Summary
-                    label="Auto-Fix Paths"
-                    value={`${summary.dynamicStripCount}`}
-                  />
-                )}
+                {summary.dynamicStripCount != null && <Summary label="Auto-Fix Paths" value={`${summary.dynamicStripCount}`} />}
               </div>
 
               <p className="section-sub">
-                File hasil sudah otomatis di-download sebagai{" "}
-                <code>optimize_file.zip</code>.
+                File hasil sudah otomatis di-download sebagai <code>optimize_file.zip</code>.
               </p>
             </section>
           )}
 
           <footer className="footer">
-            <span>
-              Minecraft Pack Optimizer · Texture · Sound · Auto-Fix · SHA-1 · PNG Size Guard
-            </span>
+            <span>Minecraft Pack Optimizer · v2 · IHDR skip · Workers · OGG Safe · SHA-1 · Size Guard</span>
           </footer>
         </div>
       </main>
     </div>
   );
-         }
+}
