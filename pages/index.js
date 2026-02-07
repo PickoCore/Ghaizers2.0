@@ -936,10 +936,8 @@ export default function Home() {
       <main className="container">
         <div className="glass-card">
           <header className="header">
-            <div>
-              <h1>Minecraft Pack Optimizer</h1>
-              <p>Client-side • Chrome Android optimized • Workers • IHDR precheck • OGG Safe • SHA-1</p>
-            </div>
+            <h1>Minecraft Pack Optimizer</h1>
+            <p>Compress your resource packs client-side with intelligent optimization · Workers · IHDR precheck · OGG Safe · SHA-1</p>
             <span className="badge">v2.0</span>
           </header>
 
@@ -981,8 +979,9 @@ export default function Home() {
                   onClick={() => setMode(m.id)}
                 >
                   <div className="mode-title-row">
-                    <span>{m.label}</span>
+                    <span style={{ fontWeight: "600", fontSize: "16px" }}>{m.label}</span>
                     {mode === m.id && <span className="mode-dot" />}
+                    {mode !== m.id && <span className="mode-dot inactive" />}
                   </div>
                   <p className="mode-desc">{m.description}</p>
                   <ul className="mode-meta">
@@ -1015,9 +1014,9 @@ export default function Home() {
               <div className="slider-value">{resolutionPercent}%</div>
             </div>
 
-            <div className="button-row" style={{ marginTop: 10 }}>
-              <button className="primary-button" onClick={() => setResolutionPercent(40)} disabled={isProcessing}>
-                40% (min)
+            <div className="button-row">
+              <button className="primary-button" onClick={() => setResolutionPercent(40)} disabled={isProcessing} title="Minimum quality">
+                40%
               </button>
               <button className="primary-button" onClick={() => setResolutionPercent(60)} disabled={isProcessing}>
                 60%
@@ -1028,8 +1027,8 @@ export default function Home() {
               <button className="primary-button" onClick={() => setResolutionPercent(100)} disabled={isProcessing}>
                 100%
               </button>
-              <button className="primary-button" onClick={() => setResolutionPercent(120)} disabled={isProcessing}>
-                120% (max)
+              <button className="primary-button" onClick={() => setResolutionPercent(120)} disabled={isProcessing} title="Maximum quality">
+                120%
               </button>
             </div>
           </section>
@@ -1040,14 +1039,15 @@ export default function Home() {
             <p className="section-sub">
               Jaga ketajaman GUI/font (nearest). Font tetap di-skip resize by policy.
             </p>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, cursor: "pointer", padding: "8px 0" }}>
               <input
                 type="checkbox"
                 checked={preservePixelArt}
                 onChange={(e) => setPreservePixelArt(e.target.checked)}
                 disabled={isProcessing}
+                style={{ cursor: "pointer", width: "18px", height: "18px" }}
               />
-              Preserve Pixel Art
+              <span style={{ fontSize: "14px" }}>Preserve Pixel Art Sharpness</span>
             </label>
           </section>
 
@@ -1058,14 +1058,15 @@ export default function Home() {
               Safe mode: hanya menghapus metadata & padding kosong di file <code>.ogg</code>, tanpa re-encode audio.
             </p>
 
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, cursor: "pointer", padding: "8px 0" }}>
               <input
                 type="checkbox"
                 checked={optimizeOgg}
                 onChange={(e) => setOptimizeOgg(e.target.checked)}
                 disabled={isProcessing}
+                style={{ cursor: "pointer", width: "18px", height: "18px" }}
               />
-              Aktifkan optimisasi sound (.ogg)
+              <span style={{ fontSize: "14px" }}>Enable Safe Sound Optimization</span>
             </label>
           </section>
 
@@ -1190,24 +1191,28 @@ export default function Home() {
           </section>
 
           {/* Progress */}
-          <section className="section">
-            <h2>Progress</h2>
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div style={{ flex: 1, height: 10, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: "100%",
-                    width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%",
-                    background: "rgba(255,255,255,0.65)"
-                  }}
-                />
+          {isProcessing && (
+            <section className="section">
+              <h2>Processing Progress</h2>
+              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <div style={{ flex: 1, height: 8, borderRadius: 20, background: "rgba(255,255,255,0.1)", overflow: "hidden", border: "1px solid rgba(124,92,255,0.2)" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%",
+                      background: "linear-gradient(90deg, var(--primary), var(--accent-blue))",
+                      transition: "width 0.3s ease-out",
+                      borderRadius: "20px"
+                    }}
+                  />
+                </div>
+                <div className="small-note" style={{ minWidth: 120, textAlign: "right", whiteSpace: "nowrap" }}>
+                  <span style={{ fontWeight: "600", color: "var(--primary-light)" }}>{progress.total ? `${progress.done}/${progress.total}` : "0/0"}</span>
+                  {progress.etaSec != null && <span> • {progress.etaSec}s left</span>}
+                </div>
               </div>
-              <div className="small-note" style={{ minWidth: 140, textAlign: "right" }}>
-                {progress.total ? `${progress.done}/${progress.total}` : "0/0"}{" "}
-                {progress.etaSec != null ? `• ETA ${progress.etaSec}s` : ""}
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Optimize button */}
           <section className="section">
