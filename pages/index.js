@@ -58,7 +58,7 @@ Tool ini dibuat GRATIS oleh ghaa untuk komunitas Minecraft.
   Laporkan ke: github.com/KhaizenNomazen
 ================================================================`;
 
-const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di github.com/KhaizenNomazen";
+const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di optimizer.ghaa.my.id";
 
 /* =========================
    MODE PRESET (dasar)
