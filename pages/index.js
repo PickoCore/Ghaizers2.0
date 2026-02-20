@@ -405,13 +405,36 @@ function computeTargetSize({ w0, h0, policy, modeConfig }) {
   return { tW, tH, smoothing };
 }
 
-function Summary({ label, value }) {
+function Summary({ label, value, icon = "📊" }) {
   return (
-    <div className="summary-card">
+    <div className="summary-card" style={{
+      transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+      animation: 'fadeInUp 0.5s ease-out'
+    }}>
+      <div style={{ fontSize: 20, marginBottom: 8 }}>{icon}</div>
       <div className="summary-label">{label}</div>
       <div className="summary-value">{value}</div>
     </div>
   );
+}
+
+// Add fadeInUp animation
+if (typeof document !== 'undefined' && !document.getElementById('fadeInUpStyle')) {
+  const style = document.createElement('style');
+  style.id = 'fadeInUpStyle';
+  style.innerHTML = `
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 export default function Home() {
@@ -784,11 +807,59 @@ export default function Home() {
           {/* HEADER */}
           <header className="header">
             <div className="header-content">
-              <div className="header-left">
-                <h1>Minecraft Pack Optimizer</h1>
-                <p>
-                  Client-side processing • Chrome Android optimized • Web Workers • IHDR precheck • OGG Safe • SHA-1 verification
+              <div className="header-left" style={{ flex: 1 }}>
+                <h1>Ghaizers 2.0 Dashboard</h1>
+                <p style={{ marginBottom: 16 }}>
+                  Next-gen Minecraft Pack Optimizer • Client-side processing • Web Workers • Real-time Analytics
                 </p>
+                {/* DASHBOARD STAT CARDS */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+                  <div style={{ 
+                    background: 'rgba(0, 255, 136, 0.08)',
+                    border: '1px solid rgba(0, 255, 136, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 16px',
+                    backdropFilter: 'blur(10px)',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                      File Status
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-primary)' }}>
+                      {file ? '✓ Ready' : '○ Waiting'}
+                    </div>
+                  </div>
+                  <div style={{ 
+                    background: 'rgba(0, 99, 255, 0.08)',
+                    border: '1px solid rgba(0, 99, 255, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 16px',
+                    backdropFilter: 'blur(10px)',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                      Active Mode
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-accent)' }}>
+                      {MODES[mode].label}
+                    </div>
+                  </div>
+                  <div style={{ 
+                    background: 'rgba(136, 68, 255, 0.08)',
+                    border: '1px solid rgba(136, 68, 255, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 16px',
+                    backdropFilter: 'blur(10px)',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                      Processing
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: isProcessing ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}>
+                      {isProcessing ? '⚡ Active' : '○ Ready'}
+                    </div>
+                  </div>
+                </div>
                 {/* CREDIT LINE DI HEADER */}
                 <p className="header-credit">
                   Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen) &nbsp;•&nbsp;
@@ -798,7 +869,7 @@ export default function Home() {
               </div>
               <div className="header-right">
                 <span className="badge">v2.0</span>
-                <span className="badge-credit">by ghaa</span>
+                <span className="badge-credit">Ghaizers by ghaa</span>
               </div>
             </div>
           </header>
@@ -844,23 +915,37 @@ export default function Home() {
                 <div className="section-number">2</div>
                 <h2>Pilih Mode Optimasi</h2>
               </div>
-              <p className="section-sub">Setiap mode memiliki karakteristik optimasi berbeda sesuai kebutuhan device.</p>
+              <p className="section-sub">Setiap mode dirancang untuk keseimbangan performa berbeda - pilih sesuai kebutuhan device Anda.</p>
               <div className="mode-grid">
-                {Object.values(MODES).map((m) => (
-                  <button key={m.id} className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
-                    disabled={isProcessing} onClick={() => setMode(m.id)}>
-                    <div className="mode-title-row">
-                      <span>{m.label}</span>
-                      {mode === m.id && <span className="mode-dot" />}
-                    </div>
-                    <p className="mode-desc">{m.description}</p>
-                    <ul className="mode-meta">
-                      <li>Scale: {Math.round(m.scale * 100)}%</li>
-                      <li>Max: {m.maxSize}px</li>
-                      <li>Minify: {m.minifyJson ? "Ya" : "Tidak"}</li>
-                    </ul>
-                  </button>
-                ))}
+                {Object.values(MODES).map((m) => {
+                  const modeIcons = { normal: "⚖️", extreme: "⚡", ultra: "🚀" };
+                  const modeColors = { 
+                    normal: { bg: "rgba(0, 255, 136, 0.08)", border: "rgba(0, 255, 136, 0.3)" },
+                    extreme: { bg: "rgba(0, 153, 255, 0.08)", border: "rgba(0, 153, 255, 0.3)" },
+                    ultra: { bg: "rgba(136, 68, 255, 0.08)", border: "rgba(136, 68, 255, 0.3)" }
+                  };
+                  const colors = modeColors[m.id] || modeColors.normal;
+                  return (
+                    <button key={m.id} className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
+                      disabled={isProcessing} onClick={() => setMode(m.id)}
+                      style={m.id === mode ? { background: colors.bg, borderColor: colors.border } : {}}>
+                      <div className="mode-title-row" style={{ marginBottom: 16 }}>
+                        <div>
+                          <div style={{ fontSize: 20, marginBottom: 4 }}>{modeIcons[m.id]}</div>
+                          <span style={{ fontSize: 16, fontWeight: 700, background: `linear-gradient(135deg, var(--color-primary), var(--color-accent))`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{m.label}</span>
+                        </div>
+                        {mode === m.id && <span className="mode-dot" />}
+                      </div>
+                      <p className="mode-desc" style={{ marginBottom: 16, minHeight: 40 }}>{m.description}</p>
+                      <ul className="mode-meta">
+                        <li>Scale: {Math.round(m.scale * 100)}%</li>
+                        <li>Max Size: {m.maxSize}px</li>
+                        <li>Min Size: {m.minSize}px</li>
+                        <li>Minify JSON: {m.minifyJson ? "✓ Ya" : "✗ Tidak"}</li>
+                      </ul>
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
@@ -1003,13 +1088,62 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Optimize Button */}
+            {/* Optimize Button & Real-time Analytics */}
             <section className="section">
               <div className="button-row">
-                <button className="primary-button optimize-button" onClick={handleOptimize} disabled={isProcessing || !file}>
-                  {isProcessing ? "🔄 Sedang mengoptimasi..." : "✨ Optimize Sekarang"}
+                <button className="primary-button optimize-button" onClick={handleOptimize} disabled={isProcessing || !file}
+                  style={{
+                    minWidth: 200,
+                    fontWeight: 700,
+                    fontSize: 16,
+                    padding: '16px 40px',
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase',
+                    boxShadow: isProcessing ? '0 0 50px rgba(0, 255, 136, 0.6)' : '0 0 40px rgba(0, 255, 136, 0.4)',
+                    animation: isProcessing ? 'pulse 2s ease-in-out infinite' : 'none'
+                  }}>
+                  {isProcessing ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⚡</span>
+                      Mengoptimasi...
+                    </span>
+                  ) : (
+                    "✨ Optimize Sekarang"
+                  )}
                 </button>
+                {isProcessing && progress.total > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    marginLeft: 'auto',
+                    padding: '12px 20px',
+                    background: 'rgba(0, 255, 136, 0.08)',
+                    border: '1px solid rgba(0, 255, 136, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    backdropFilter: 'blur(10px)'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>Real-time Progress</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-primary)' }}>
+                        {progress.done} / {progress.total} files
+                      </div>
+                    </div>
+                    <div style={{ width: 2, height: 32, background: 'var(--color-primary)', opacity: 0.3 }} />
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>ETA</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-accent)' }}>
+                        {progress.etaSec ? `${progress.etaSec}s` : '--'}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+              {!isProcessing && file && (
+                <div style={{ marginTop: 16, padding: 12, background: 'rgba(0, 255, 136, 0.05)', border: '1px solid rgba(0, 255, 136, 0.15)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                  📋 {fileName} ({(file.size / 1e6).toFixed(2)} MB) siap dioptimalkan
+                </div>
+              )}
             </section>
 
             {/* Console */}
@@ -1017,7 +1151,25 @@ export default function Home() {
               <div className="section-header">
                 <div className="section-number">10</div>
                 <h2>Console Output</h2>
+                {isProcessing && progress.total > 0 && (
+                  <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-primary)', fontWeight: 600 }}>
+                    {progress.done} / {progress.total} files {progress.etaSec ? `(${progress.etaSec}s)` : ''}
+                  </div>
+                )}
               </div>
+              {isProcessing && progress.total > 0 && (
+                <div className="progress-wrapper">
+                  <div className="progress-bar-container">
+                    <div className="progress-bar">
+                      <div 
+                        className="progress-bar-fill"
+                        style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                      />
+                    </div>
+                    <div className="progress-text">{Math.round((progress.done / progress.total) * 100)}%</div>
+                  </div>
+                </div>
+              )}
               <div className="console" ref={logRef}>
                 {logs.length === 0 ? (
                   <div className="console-placeholder">Belum ada log. Upload pack dan klik &quot;Optimize Sekarang&quot;.</div>
@@ -1035,16 +1187,16 @@ export default function Home() {
                   <h2>Hasil Optimasi</h2>
                 </div>
                 <div className="summary-grid">
-                  <Summary label="Ukuran File" value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`} />
-                  <Summary label="Penghematan" value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`} />
-                  <Summary label="PNG Optimized" value={`${summary.pngOptimized} / ${summary.pngCount}`} />
-                  <Summary label="PNG Skipped" value={summary.pngSkippedByIHDR} />
-                  {summary.oggCount > 0 && <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />}
-                  <Summary label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
-                  <Summary label="Files Removed" value={summary.removed} />
-                  <Summary label="Workers Used" value={summary.workers} />
+                  <Summary icon="💾" label="Ukuran File" value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`} />
+                  <Summary icon="⚡" label="Penghematan" value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`} />
+                  <Summary icon="🖼️" label="PNG Optimized" value={`${summary.pngOptimized} / ${summary.pngCount}`} />
+                  <Summary icon="📋" label="PNG Skipped" value={summary.pngSkippedByIHDR} />
+                  {summary.oggCount > 0 && <Summary icon="🔊" label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />}
+                  <Summary icon="📄" label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
+                  <Summary icon="🗑️" label="Files Removed" value={summary.removed} />
+                  <Summary icon="⚙️" label="Workers Used" value={summary.workers} />
                   {summary.sha1 && (
-                    <Summary label="SHA-1 Hash" value={
+                    <Summary icon="🔐" label="SHA-1 Hash" value={
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                         <span style={{ fontFamily: "monospace", fontSize: 11 }}>{summary.sha1.substring(0, 16)}...</span>
                         <button className="primary-button" style={{ padding: "4px 12px", fontSize: 11 }}
@@ -1061,21 +1213,57 @@ export default function Home() {
           </div>
 
           {/* FOOTER WITH FULL CREDIT */}
-          <footer className="footer">
+          <footer className="footer" style={{ position: 'relative', overflow: 'hidden' }}>
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.5), transparent)',
+              zIndex: 1
+            }} />
             <div className="footer-credit-box">
-              <p className="footer-title">⚡ Ghaizers2.0 — Minecraft Pack Optimizer</p>
-              <p className="footer-author">Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen)</p>
-              <p className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</p>
+              <p className="footer-title" style={{ fontSize: 16, marginBottom: 12 }}>⚡ Ghaizers 2.0 — Next-Gen Minecraft Pack Optimizer</p>
+              <p className="footer-author">Made with passion by <strong>ghaa</strong> (KhaizenNomazen)</p>
+              <p className="footer-free">🆓 Completely FREE Forever — No hidden costs</p>
               <p className="footer-legal">
-                ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun & denda max Rp 4 miliar
+                ⚖️ Selling this tool violates Indonesian Copyright Law No. 28/2014 — Report violations at github.com/KhaizenNomazen
               </p>
-              <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
-                🔗 github.com/KhaizenNomazen — Laporkan penyalahgunaan di sini
+              <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 12 }}>
+                🔗 Visit Repository • Report Issues • Contribute
               </a>
             </div>
-            <p style={{ fontSize: 11, marginTop: 12, opacity: 0.4 }}>
-              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark
-            </p>
+            <div style={{
+              marginTop: 24,
+              paddingTop: 16,
+              borderTop: '1px solid rgba(0, 255, 136, 0.1)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: 16,
+              textAlign: 'left',
+              fontSize: 12,
+              color: 'var(--color-text-muted)'
+            }}>
+              <div>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Features</div>
+                <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--color-text-tertiary)' }}>
+                  IHDR Detection • Web Workers • OGG Safe • SHA-1 Hash • Size Guard • Dual-strip Mode
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Performance</div>
+                <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--color-text-tertiary)' }}>
+                  Client-side Processing • Real-time Analytics • Worker Pool Optimization
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Made with</div>
+                <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--color-primary)' }}>
+                  React • JavaScript • Web Workers • JSZip
+                </div>
+              </div>
+            </div>
           </footer>
         </div>
       </main>
