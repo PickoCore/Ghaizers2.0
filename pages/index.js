@@ -2,6 +2,65 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 
 /* =========================
+   CREDIT & WATERMARK
+   © 2025 ghaa (KhaizenNomazen)
+   Tool ini GRATIS. Dilarang keras dijual.
+   Pelanggaran = terjerat hukum (UU Hak Cipta)
+========================= */
+const CREDIT_BANNER = [
+  "╔══════════════════════════════════════════════════╗",
+  "║     Ghaizers2.0 — Minecraft Pack Optimizer       ║",
+  "║     Made with 💚 by ghaa (KhaizenNomazen)        ║",
+  "║     Tool ini 100% GRATIS — JANGAN DIBAYAR!       ║",
+  "║     Menjual tool ini = PELANGGARAN HUKUM         ║",
+  "║     UU Hak Cipta No. 28 Tahun 2014 (Indonesia)   ║",
+  "║     github.com/KhaizenNomazen                    ║",
+  "╚══════════════════════════════════════════════════╝",
+];
+
+const CREDIT_TXT = `================================================================
+  GHAIZERS 2.0 — Minecraft Resource Pack Optimizer
+  © 2025 ghaa (KhaizenNomazen). All rights reserved.
+================================================================
+
+Tool ini dibuat GRATIS oleh ghaa untuk komunitas Minecraft.
+
+⚠️  PERINGATAN HUKUM / LEGAL WARNING:
+    Menjual, mendistribusikan ulang secara komersial, atau
+    mengklaim kepemilikan tool ini TANPA izin tertulis dari
+    ghaa (KhaizenNomazen) adalah PELANGGARAN HUKUM yang
+    dapat dituntut berdasarkan:
+
+    🇮🇩 UU Hak Cipta No. 28 Tahun 2014 (Indonesia)
+    🌍 Berne Convention for the Protection of Literary
+       and Artistic Works (Internasional)
+    🌍 WIPO Copyright Treaty
+
+    Pelanggar dapat dikenakan:
+    - Pidana penjara maksimal 10 tahun
+    - Denda maksimal Rp 4.000.000.000 (4 miliar rupiah)
+
+✅  PENGGUNAAN YANG DIIZINKAN:
+    - Gratis untuk penggunaan pribadi
+    - Gratis untuk komunitas / server non-komersial
+    - Modifikasi dengan tetap mencantumkan credit
+
+❌  DILARANG KERAS:
+    - Menjual tool ini dalam bentuk apapun
+    - Menghapus credit / watermark ini
+    - Mengklaim sebagai karya sendiri
+
+📧  Kontak / Laporan penyalahgunaan:
+    github.com/KhaizenNomazen
+
+================================================================
+  Jika kamu MEMBAYAR untuk tool ini → kamu DITIPU.
+  Laporkan ke: github.com/KhaizenNomazen
+================================================================`;
+
+const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di github.com/KhaizenNomazen";
+
+/* =========================
    MODE PRESET (dasar)
 ========================= */
 const MODES = {
@@ -36,32 +95,19 @@ const MODES = {
 
 /* =========================
    POLICY STATIS PER KATEGORI
-   (dievaluasi berurutan)
 ========================= */
 const BASE_POLICIES = [
-  // GUI & FONT → jaga ketajaman
   { pattern: /textures\/gui\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0 },
   { pattern: /textures\/font\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0, skipResize: true },
-
-  // ModelEngine → paksa animated strip + batasi tinggi
   { pattern: /modelengine\//, enforceStrip: true, maxHeight: 8192, smoothing: "smooth" },
-
-  // Colormap & Maps → data sensitif → skip
   { pattern: /colormap\//, skip: true },
   { pattern: /maps\//, skip: true },
-
-  // Entity/mob → moderat
   { pattern: /textures\/entity\//, scaleMul: 0.85 },
-
-  // Particles → agresif (biasanya kecil & banyak)
   { pattern: /textures\/particle\//, scaleMul: 0.75, smoothing: "nearest" },
-
-  // Default
   { pattern: /.*/, scaleMul: 1.0 }
 ];
 
 function getPolicyForPath(lowerPath, dynamicStripPaths) {
-  // 1) dynamic enforceStrip dari log (prioritas tertinggi)
   if (Array.isArray(dynamicStripPaths)) {
     for (let i = 0; i < dynamicStripPaths.length; i++) {
       const key = dynamicStripPaths[i];
@@ -70,18 +116,14 @@ function getPolicyForPath(lowerPath, dynamicStripPaths) {
       }
     }
   }
-
-  // 2) base policies
   for (let i = 0; i < BASE_POLICIES.length; i++) {
     if (BASE_POLICIES[i].pattern.test(lowerPath)) {
       return { ...BASE_POLICIES[i] };
     }
   }
-
   return { scaleMul: 1.0 };
 }
 
-/* ========== FILTER FILE NON-GAME ========== */
 function shouldExcludeNonGameFile(lower) {
   if (
     lower.endsWith(".psd") ||
@@ -93,7 +135,6 @@ function shouldExcludeNonGameFile(lower) {
   )
     return true;
 
-  // aset utama: jangan buang
   if (
     lower.endsWith(".png") ||
     lower.endsWith(".json") ||
@@ -121,24 +162,19 @@ function shouldExcludeNonGameFile(lower) {
   return false;
 }
 
-/* ========== PARSER LOG POJAV (Auto-Fix) ========== */
 function parsePojavLog(text) {
   const enforceStrip = new Set();
   const missing = new Set();
-
   const reStrip = /size .*? is not multiple of frame size|not multiple of frame size/i;
   const rePathPng = /(['"])([^'"]+?\.png)\1/i;
   const reMissing = /Missing sprite.*?([^\s]+?\.png)/i;
-
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
     if (reStrip.test(line)) {
       const m = rePathPng.exec(line);
       if (m && m[2]) enforceStrip.add(m[2].toLowerCase());
     }
-
     const mm = reMissing.exec(line);
     if (mm && mm[1]) missing.add(mm[1].toLowerCase());
   }
@@ -150,44 +186,29 @@ function uniqueLower(arr) {
   const out = [];
   for (let i = 0; i < arr.length; i++) {
     const v = (arr[i] || "").toLowerCase();
-    if (!s.has(v)) {
-      s.add(v);
-      out.push(v);
-    }
+    if (!s.has(v)) { s.add(v); out.push(v); }
   }
   return out;
 }
 
-/* ========== PNG IHDR FAST SIZE PARSE (tanpa decode) ========== */
 function readPngIHDRSize(buffer) {
   try {
     const u8 = new Uint8Array(buffer);
     if (u8.length < 24) return null;
-
-    // signature 8 bytes
     const sig = [137, 80, 78, 71, 13, 10, 26, 10];
     for (let i = 0; i < 8; i++) if (u8[i] !== sig[i]) return null;
-
-    // chunk length (4) at 8..11, type at 12..15
     const type =
-      String.fromCharCode(u8[12]) +
-      String.fromCharCode(u8[13]) +
-      String.fromCharCode(u8[14]) +
-      String.fromCharCode(u8[15]);
+      String.fromCharCode(u8[12]) + String.fromCharCode(u8[13]) +
+      String.fromCharCode(u8[14]) + String.fromCharCode(u8[15]);
     if (type !== "IHDR") return null;
-
-    // IHDR data starts at 16
     const dv = new DataView(buffer);
     const w = dv.getUint32(16, false);
     const h = dv.getUint32(20, false);
     if (!w || !h) return null;
     return { w, h };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-/* ========== ANIMATED STRIP DETECTOR ========== */
 function detectAnimatedStrip(width, height) {
   if (!width || !height) return null;
   if (height <= width) return null;
@@ -196,91 +217,57 @@ function detectAnimatedStrip(width, height) {
   return frames;
 }
 
-/* ========== SAFE OGG OPTIMIZER ========== */
 async function optimizeOggSafe(buffer) {
   try {
     const bytes = new Uint8Array(buffer);
     const len = bytes.length;
     if (len < 16) return { out: buffer, changed: false };
-
-    let start = 0;
-    let end = len;
-    let changed = false;
-
-    // ID3v2
+    let start = 0, end = len, changed = false;
     if (len >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
       const size =
-        ((bytes[6] & 0x7f) << 21) |
-        ((bytes[7] & 0x7f) << 14) |
-        ((bytes[8] & 0x7f) << 7) |
-        (bytes[9] & 0x7f);
+        ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) |
+        ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f);
       const headerLen = 10 + size;
-      if (headerLen < end) {
-        start = headerLen;
-        changed = true;
-      }
+      if (headerLen < end) { start = headerLen; changed = true; }
     }
-
-    // ID3v1
     if (end - start > 128) {
       const tagPos = end - 128;
-      if (
-        bytes[tagPos] === 0x54 &&
-        bytes[tagPos + 1] === 0x41 &&
-        bytes[tagPos + 2] === 0x47
-      ) {
-        end = tagPos;
-        changed = true;
+      if (bytes[tagPos] === 0x54 && bytes[tagPos + 1] === 0x41 && bytes[tagPos + 2] === 0x47) {
+        end = tagPos; changed = true;
       }
     }
-
-    while (end > start && bytes[end - 1] === 0x00) {
-      end--;
-      changed = true;
-    }
-
+    while (end > start && bytes[end - 1] === 0x00) { end--; changed = true; }
     if (!changed || end <= start) return { out: buffer, changed: false };
-
     const trimmed = bytes.subarray(start, end);
     const out = new Uint8Array(trimmed.length);
     out.set(trimmed);
     return { out: out.buffer, changed: true };
-  } catch {
-    return { out: buffer, changed: false };
-  }
+  } catch { return { out: buffer, changed: false }; }
 }
 
-/* ========== BUILD pack.png DARI ICON ========== */
 async function buildPackIcon(file) {
   const buf = await file.arrayBuffer();
   const blob = new Blob([buf], { type: file.type || "image/png" });
-
   const img = await createImageBitmap(blob);
   const target = 128;
-
   const canvas = document.createElement("canvas");
-  canvas.width = target;
-  canvas.height = target;
+  canvas.width = target; canvas.height = target;
   const ctx = canvas.getContext("2d");
-
   ctx.clearRect(0, 0, target, target);
   const scale = Math.min(target / img.width, target / img.height, 1);
   const dw = Math.round(img.width * scale);
   const dh = Math.round(img.height * scale);
   const ox = Math.floor((target - dw) / 2);
   const oy = Math.floor((target - dh) / 2);
-
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, ox, oy, dw, dh);
-
   const outBlob = await new Promise((resolve) =>
     canvas.toBlob((b) => resolve(b || blob), "image/png", 0.92)
   );
   return await outBlob.arrayBuffer();
 }
 
-/* ========== SHA-1 dari Blob (WebCrypto) ========== */
 async function sha1HexFromBlob(blob) {
   try {
     if (typeof window === "undefined" || !window.crypto?.subtle) return null;
@@ -290,61 +277,45 @@ async function sha1HexFromBlob(blob) {
     let hex = "";
     for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
     return hex;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-/* ========== DOWNLOAD ========= */
 function triggerDownload(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-/* ========== WORKER POOL (PNG resize) ========== */
 function makePngWorkerURL() {
   const workerCode = `
     self.onmessage = async (ev) => {
       const msg = ev.data;
       if (!msg || msg.type !== "png") return;
-
       const { id, buffer, w0, h0, tW, tH, smoothing, sizeGuard } = msg;
-
       try {
         if (!buffer || !tW || !tH || (tW === w0 && tH === h0)) {
           self.postMessage({ id, ok: true, out: buffer, changed: false }, buffer ? [buffer] : []);
           return;
         }
-
         const originalSize = buffer.byteLength || 0;
-
         const blob = new Blob([buffer], { type: "image/png" });
         const bmp = await createImageBitmap(blob);
-
         const canvas = new OffscreenCanvas(tW, tH);
         const ctx = canvas.getContext("2d");
-
         const nearest = smoothing === "nearest";
         ctx.imageSmoothingEnabled = !nearest;
         ctx.imageSmoothingQuality = nearest ? "low" : "high";
-
         ctx.clearRect(0, 0, tW, tH);
         ctx.drawImage(bmp, 0, 0, tW, tH);
-
         const outBlob = await canvas.convertToBlob({ type: "image/png" });
         const outBuf = await outBlob.arrayBuffer();
-
         if (sizeGuard && outBuf.byteLength >= originalSize) {
           self.postMessage({ id, ok: true, out: buffer, changed: false, guarded: true }, [buffer]);
           return;
         }
-
         self.postMessage({ id, ok: true, out: outBuf, changed: true, guarded: false }, [outBuf]);
       } catch (e) {
         try {
@@ -361,33 +332,20 @@ function makePngWorkerURL() {
 
 function createWorkerPool(size) {
   const url = makePngWorkerURL();
-  const workers = [];
-  const free = [];
-  const pending = new Map();
+  const workers = [], free = [], pending = new Map();
   let seq = 0;
-
   function spawn() {
     const w = new Worker(url);
     w.onmessage = (ev) => {
       const { id, ok, out, changed, guarded, error } = ev.data || {};
       const cb = pending.get(id);
-      if (cb) {
-        pending.delete(id);
-        cb.resolve({ ok, out, changed, guarded, error });
-      }
-      free.push(w);
-      pump();
+      if (cb) { pending.delete(id); cb.resolve({ ok, out, changed, guarded, error }); }
+      free.push(w); pump();
     };
-    w.onerror = (err) => {
-      free.push(w);
-      pump();
-    };
-    workers.push(w);
-    free.push(w);
+    w.onerror = () => { free.push(w); pump(); };
+    workers.push(w); free.push(w);
   }
-
   for (let i = 0; i < size; i++) spawn();
-
   const queue = [];
   function pump() {
     while (free.length > 0 && queue.length > 0) {
@@ -397,7 +355,6 @@ function createWorkerPool(size) {
       w.postMessage(job.payload, [job.payload.buffer]);
     }
   }
-
   function runPngJob(payload) {
     const id = ++seq;
     return new Promise((resolve, reject) => {
@@ -405,32 +362,24 @@ function createWorkerPool(size) {
       pump();
     });
   }
-
   function destroy() {
     for (const w of workers) w.terminate();
     URL.revokeObjectURL(url);
   }
-
   return { runPngJob, destroy };
 }
 
-/* ========== TARGET SIZE CALC (tanpa decode) ========== */
 function computeTargetSize({ w0, h0, policy, modeConfig }) {
-  const { scale, minSize, maxSize, preservePixelArt } = modeConfig;
-
+  const { scale, minSize, maxSize } = modeConfig;
   const frames = detectAnimatedStrip(w0, h0);
   const baseScale = Math.max(0.01, scale) * (policy.scaleMul || 1.0);
-
   let tW = Math.round(w0 * baseScale);
   const minAllowed = Math.max(minSize, policy.minSize || 0);
   tW = Math.min(Math.max(tW, minAllowed), maxSize);
-
   let tH;
-
   if (frames || policy.enforceStrip) {
     const fCount = frames || Math.max(1, Math.round(h0 / w0));
     tH = tW * fCount;
-
     if (policy.maxHeight && tH > policy.maxHeight) {
       const fac = policy.maxHeight / tH;
       tW = Math.max(1, Math.round(tW * fac));
@@ -438,14 +387,12 @@ function computeTargetSize({ w0, h0, policy, modeConfig }) {
     }
   } else {
     let hScaled = Math.round(h0 * baseScale);
-
     let maxSide = Math.max(tW, hScaled);
     if (maxSide > maxSize) {
       const fac = maxSize / maxSide;
       tW = Math.round(tW * fac);
       hScaled = Math.round(hScaled * fac);
     }
-
     let minSide = Math.min(tW, hScaled);
     if (minSide < minAllowed) {
       const fac = minAllowed / minSide;
@@ -454,12 +401,10 @@ function computeTargetSize({ w0, h0, policy, modeConfig }) {
     }
     tH = hScaled;
   }
-
-  const smoothing = policy.smoothing || (preservePixelArt ? "nearest" : "smooth");
+  const smoothing = policy.smoothing || (modeConfig.preservePixelArt ? "nearest" : "smooth");
   return { tW, tH, smoothing };
 }
 
-/* ========== UI COMPONENTS ========== */
 function Summary({ label, value }) {
   return (
     <div className="summary-card">
@@ -474,29 +419,20 @@ export default function Home() {
   const [resolutionPercent, setResolutionPercent] = useState(100);
   const [preservePixelArt, setPreservePixelArt] = useState(true);
   const [optimizeOgg, setOptimizeOgg] = useState(true);
-
   const [zipCompressionLevel, setZipCompressionLevel] = useState(6);
   const [workerCount, setWorkerCount] = useState(0);
-
   const [logs, setLogs] = useState([]);
   const logRef = useRef(null);
-
   const [fileName, setFileName] = useState("");
   const [file, setFile] = useState(null);
-
   const [iconFile, setIconFile] = useState(null);
-
   const [mcmetaText, setMcmetaText] = useState("");
   const [mcmetaLoaded, setMcmetaLoaded] = useState(false);
   const [mcmetaError, setMcmetaError] = useState("");
-
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState(null);
-
   const [dynamicStripPaths, setDynamicStripPaths] = useState([]);
-
   const [progress, setProgress] = useState({ done: 0, total: 0, etaSec: null });
-
   const logBufferRef = useRef([]);
   const flushTimerRef = useRef(null);
 
@@ -536,19 +472,11 @@ export default function Home() {
   const onMainFileChange = async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
-
-    setFile(f);
-    setFileName(f.name);
-    setSummary(null);
-    setLogs([]);
-    logBufferRef.current = [];
+    setFile(f); setFileName(f.name); setSummary(null);
+    setLogs([]); logBufferRef.current = [];
     setProgress({ done: 0, total: 0, etaSec: null });
-
-    setMcmetaText("");
-    setMcmetaLoaded(false);
-    setMcmetaError("");
+    setMcmetaText(""); setMcmetaLoaded(false); setMcmetaError("");
     appendLog(`File diterima: ${f.name} (${(f.size / 1e6).toFixed(2)} MB)`);
-
     await inspectZipForMcmeta(f);
   };
 
@@ -571,9 +499,7 @@ export default function Home() {
       appendLog("Auto-Fix: tidak ada path animated strip bermasalah di log.");
     }
     if (parsed.missing.length > 0) {
-      appendLog(
-        `Missing sprite terdeteksi (${parsed.missing.length}) — ini masalah pack asli, bukan optimizer.`
-      );
+      appendLog(`Missing sprite terdeteksi (${parsed.missing.length}) — ini masalah pack asli, bukan optimizer.`);
     }
   };
 
@@ -583,52 +509,37 @@ export default function Home() {
       const zip = await JSZip.loadAsync(f);
       const entries = Object.values(zip.files);
       const mcmetaEntry = entries.find((e) => e.name.toLowerCase() === "pack.mcmeta");
-
       if (!mcmetaEntry) {
         appendLog("pack.mcmeta tidak ditemukan di root pack.");
-        setMcmetaLoaded(false);
-        setMcmetaText("");
-        setMcmetaError("");
+        setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError("");
         return;
       }
-
       const text = await mcmetaEntry.async("string");
-      setMcmetaText(text);
-      setMcmetaLoaded(true);
-      setMcmetaError("");
+      setMcmetaText(text); setMcmetaLoaded(true); setMcmetaError("");
       appendLog("pack.mcmeta berhasil dibaca. Kamu bisa mengeditnya.");
     } catch (e) {
-      setMcmetaLoaded(false);
-      setMcmetaText("");
-      setMcmetaError("Gagal membaca pack.mcmeta");
+      setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError("Gagal membaca pack.mcmeta");
       appendLog("Gagal membaca pack.mcmeta: " + e.message);
     }
   };
 
   const handleOptimize = async () => {
-    if (!file) {
-      appendLog("Pilih resource pack (.zip) dulu.");
-      return;
-    }
+    if (!file) { appendLog("Pilih resource pack (.zip) dulu."); return; }
 
     const baseMode = MODES[mode];
     const effectiveScale = baseMode.scale * (resolutionPercent / 100);
+    const modeConfig = { ...baseMode, scale: effectiveScale, preservePixelArt };
 
-    const modeConfig = {
-      ...baseMode,
-      scale: effectiveScale,
-      preservePixelArt
-    };
+    // ══════ CREDIT BANNER DI CONSOLE ══════
+    CREDIT_BANNER.forEach((line) => appendLog(line));
+    appendLog(" ");
 
     appendLog(`Mode: ${baseMode.label}`);
     appendLog(`Scale efektif: ${(effectiveScale * 100).toFixed(0)}% (slider ${resolutionPercent}%)`);
-    appendLog(`PNG precheck: IHDR parse aktif (skip decode kalau ga perlu resize).`);
-    appendLog(`Workers: ${computedWorkerCount} (PNG resize off-main-thread)`);
-    appendLog(`ZIP compression level: ${zipCompressionLevel} (6 = cepat, 9 = paling kecil tapi lambat)`);
-    appendLog(`JSZip: typed-array flow dipakai untuk performa.`);
+    appendLog(`Workers: ${computedWorkerCount}`);
+    appendLog(`ZIP compression level: ${zipCompressionLevel}`);
 
-    setIsProcessing(true);
-    setSummary(null);
+    setIsProcessing(true); setSummary(null);
     setProgress({ done: 0, total: 0, etaSec: null });
 
     const pool = createWorkerPool(computedWorkerCount);
@@ -642,15 +553,8 @@ export default function Home() {
       const entries = Object.values(zip.files);
 
       const stats = {
-        totalFiles: 0,
-        pngCount: 0,
-        pngOptimized: 0,
-        pngSkippedByIHDR: 0,
-        jsonCount: 0,
-        jsonMinified: 0,
-        removed: 0,
-        oggCount: 0,
-        oggOptimized: 0
+        totalFiles: 0, pngCount: 0, pngOptimized: 0, pngSkippedByIHDR: 0,
+        jsonCount: 0, jsonMinified: 0, removed: 0, oggCount: 0, oggOptimized: 0
       };
 
       const totalToProcess = entries.filter((e) => !e.dir).length;
@@ -670,11 +574,7 @@ export default function Home() {
 
       for (let idx = 0; idx < entries.length; idx++) {
         const entry = entries[idx];
-
-        if (entry.dir) {
-          outZip.folder(entry.name);
-          continue;
-        }
+        if (entry.dir) { outZip.folder(entry.name); continue; }
 
         const name = entry.name;
         const lower = name.toLowerCase();
@@ -687,6 +587,7 @@ export default function Home() {
           continue;
         }
 
+        // ══════ PACK.MCMETA — INJECT CREDIT ══════
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
           const original = await entry.async("string");
@@ -696,21 +597,31 @@ export default function Home() {
             appendLog("Menggunakan pack.mcmeta hasil edit user.");
           }
 
-          if (modeConfig.minifyJson) {
-            try {
-              const obj = JSON.parse(toWrite);
-              const minified = JSON.stringify(obj);
-              outZip.file(name, minified);
-              stats.jsonMinified++;
-              appendLog("pack.mcmeta di-minify.");
-            } catch {
-              outZip.file(name, toWrite);
-              appendLog("pack.mcmeta bukan JSON valid, ditulis apa adanya.");
+          try {
+            const obj = JSON.parse(toWrite);
+            // Inject watermark credit ke description mcmeta
+            const originalDesc = obj?.pack?.description || "";
+            obj.pack = obj.pack || {};
+            obj.pack._credit = "© ghaa (KhaizenNomazen) | Ghaizers2.0 | GRATIS | Dilarang dijual!";
+            obj.pack._legal = "UU Hak Cipta No.28/2014 | Melanggar = pidana & denda";
+            obj.pack._source = "github.com/KhaizenNomazen";
+            // Tambah watermark di description Minecraft (dengan §)
+            if (typeof originalDesc === "string" && !originalDesc.includes("ghaa")) {
+              obj.pack.description = originalDesc
+                ? `${originalDesc} §7| §cOptimized by §aghaa`
+                : CREDIT_MCMETA_DESC;
             }
-          } else {
+            if (modeConfig.minifyJson) {
+              outZip.file(name, JSON.stringify(obj));
+            } else {
+              outZip.file(name, JSON.stringify(obj, null, 2));
+            }
+            stats.jsonMinified++;
+            appendLog("pack.mcmeta: credit & watermark injected ✔");
+          } catch {
             outZip.file(name, toWrite);
+            appendLog("pack.mcmeta bukan JSON valid, ditulis apa adanya.");
           }
-
           updateProgress();
           continue;
         }
@@ -718,65 +629,45 @@ export default function Home() {
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
-
           if (optimizeOgg) {
             const { out, changed } = await optimizeOggSafe(buf);
             if (changed) {
               stats.oggOptimized++;
-              appendLog(`OGG safe optimized: ${name} (${buf.byteLength} → ${out.byteLength} bytes)`);
-            } else {
-              appendLog(`OGG copy (no change): ${name}`);
+              appendLog(`OGG safe optimized: ${name}`);
             }
             outZip.file(name, out);
           } else {
             outZip.file(name, buf);
-            appendLog(`OGG copy (optimize off): ${name}`);
           }
-
           updateProgress();
           continue;
         }
 
         if (lower.endsWith(".png")) {
           stats.pngCount++;
-
           const policy = getPolicyForPath(lower, dynamicStripPaths);
-
           if (!preservePixelArt && policy.smoothing === "nearest") policy.smoothing = "smooth";
 
           if (policy.skip) {
             const buf = await entry.async("arraybuffer");
             outZip.file(name, buf);
-            appendLog(`PNG skip (policy): ${name}`);
-            updateProgress();
-            continue;
+            updateProgress(); continue;
           }
-
           if (policy.skipResize) {
             const buf = await entry.async("arraybuffer");
             outZip.file(name, buf);
-            appendLog(`PNG skip resize (policy): ${name}`);
-            updateProgress();
-            continue;
+            updateProgress(); continue;
           }
 
           const buf = await entry.async("arraybuffer");
-
           if (buf.byteLength < 2048) {
             outZip.file(name, buf);
             stats.pngSkippedByIHDR++;
-            appendLog(`PNG tiny skip (<2KB): ${name}`);
-            updateProgress();
-            continue;
+            updateProgress(); continue;
           }
 
           const sz = readPngIHDRSize(buf);
-          if (!sz) {
-            outZip.file(name, buf);
-            appendLog(`PNG IHDR parse gagal, copy: ${name}`);
-            updateProgress();
-            continue;
-          }
+          if (!sz) { outZip.file(name, buf); updateProgress(); continue; }
 
           const { w: w0, h: h0 } = sz;
           const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
@@ -784,30 +675,18 @@ export default function Home() {
           if (tW === w0 && tH === h0) {
             outZip.file(name, buf);
             stats.pngSkippedByIHDR++;
-            updateProgress();
-            continue;
+            updateProgress(); continue;
           }
 
-          const res = await pool.runPngJob({
-            buffer: buf,
-            w0,
-            h0,
-            tW,
-            tH,
-            smoothing,
-            sizeGuard: true
-          });
+          const res = await pool.runPngJob({ buffer: buf, w0, h0, tW, tH, smoothing, sizeGuard: true });
 
           if (res?.changed) {
             stats.pngOptimized++;
-            appendLog(`PNG resized: ${name} (${w0}x${h0} → ${tW}x${tH}, ${buf.byteLength} → ${res.out.byteLength} bytes)`);
-          } else if (res?.guarded) {
-            appendLog(`PNG size-guard (hasil >= asli), keep original: ${name}`);
+            appendLog(`PNG resized: ${name} (${w0}x${h0} → ${tW}x${tH})`);
           }
 
           outZip.file(name, res?.out || buf);
-          updateProgress();
-          continue;
+          updateProgress(); continue;
         }
 
         if (lower.endsWith(".json")) {
@@ -816,25 +695,35 @@ export default function Home() {
           if (modeConfig.minifyJson) {
             try {
               const obj = JSON.parse(text);
-              const minified = JSON.stringify(obj);
-              outZip.file(name, minified);
+              outZip.file(name, JSON.stringify(obj));
               stats.jsonMinified++;
-              appendLog(`JSON minified: ${name}`);
             } catch {
               outZip.file(name, text);
-              appendLog(`JSON invalid (skip minify): ${name}`);
             }
           } else {
             outZip.file(name, text);
           }
-          updateProgress();
-          continue;
+          updateProgress(); continue;
         }
 
         const content = await entry.async("arraybuffer");
         outZip.file(name, content);
         updateProgress();
       }
+
+      // ══════ INJECT FILE CREDIT WAJIB ══════
+      outZip.file("GHAIZERS_CREDIT.txt", CREDIT_TXT);
+      outZip.file("JANGAN_BAYAR_INI.txt",
+        "⚠️  PERINGATAN PENTING!\n\n" +
+        "Jika kamu MEMBAYAR untuk mendapatkan tool ini atau pack yang dioptimasi ini,\n" +
+        "kamu sedang DITIPU!\n\n" +
+        "Tool Ghaizers2.0 oleh ghaa (KhaizenNomazen) adalah GRATIS.\n" +
+        "Laporkan penjual tidak bertanggung jawab ke:\n" +
+        "github.com/KhaizenNomazen\n\n" +
+        "Menjual tool/output ini tanpa izin = MELANGGAR UU Hak Cipta No. 28 Tahun 2014\n" +
+        "Pelanggar dapat dipidana penjara & denda miliaran rupiah."
+      );
+      appendLog("Credit files injected: GHAIZERS_CREDIT.txt + JANGAN_BAYAR_INI.txt ✔");
 
       if (iconFile) {
         appendLog("Menambahkan / override pack.png dari icon upload...");
@@ -846,26 +735,24 @@ export default function Home() {
       const optimizedBlob = await outZip.generateAsync({
         type: "blob",
         compression: "DEFLATE",
-        compressionOptions: { level: Math.max(1, Math.min(9, zipCompressionLevel)) }
+        compressionOptions: { level: Math.max(1, Math.min(9, zipCompressionLevel)) },
+        comment: "Optimized by Ghaizers2.0 | (c) ghaa (KhaizenNomazen) | GRATIS - Dilarang Dijual! | github.com/KhaizenNomazen"
       });
 
       const sha1 = await sha1HexFromBlob(optimizedBlob);
       if (sha1) appendLog(`SHA-1 hasil: ${sha1}`);
 
-      appendLog("Selesai ✔ Menyiapkan download optimize_file.zip");
+      appendLog(" ");
+      CREDIT_BANNER.forEach((line) => appendLog(line));
+      appendLog("Selesai ✔ Menyiapkan download...");
       triggerDownload(optimizedBlob, "optimize_file.zip");
 
       setSummary({
-        ...stats,
-        originalSize: file.size,
-        optimizedSize: optimizedBlob.size,
-        sha1: sha1 || null,
-        dynamicStripCount: dynamicStripPaths.length,
-        workers: computedWorkerCount,
-        compressionLevel: zipCompressionLevel
+        ...stats, originalSize: file.size, optimizedSize: optimizedBlob.size,
+        sha1: sha1 || null, dynamicStripCount: dynamicStripPaths.length,
+        workers: computedWorkerCount, compressionLevel: zipCompressionLevel
       });
 
-      appendLog("Optimasi selesai.");
       flushLogs();
       setProgress({ done: totalToProcess, total: totalToProcess, etaSec: 0 });
     } catch (e) {
@@ -884,6 +771,14 @@ export default function Home() {
       <div className="background-orbit bg-2" />
       <div className="background-gradient" />
 
+      {/* WATERMARK STRIP TOP */}
+      <div className="watermark-topbar">
+        ⚠️ Tool ini 100% GRATIS oleh <strong>ghaa</strong> — Jika kamu membayar untuk ini, kamu DITIPU! &nbsp;|&nbsp;
+        <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
+          github.com/KhaizenNomazen
+        </a>
+      </div>
+
       <main className="container">
         <div className="glass-card">
           {/* HEADER */}
@@ -894,10 +789,33 @@ export default function Home() {
                 <p>
                   Client-side processing • Chrome Android optimized • Web Workers • IHDR precheck • OGG Safe • SHA-1 verification
                 </p>
+                {/* CREDIT LINE DI HEADER */}
+                <p className="header-credit">
+                  Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen) &nbsp;•&nbsp;
+                  Tool ini <span className="credit-free">GRATIS</span> selamanya &nbsp;•&nbsp;
+                  <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
+                </p>
               </div>
-              <span className="badge">v2.0</span>
+              <div className="header-right">
+                <span className="badge">v2.0</span>
+                <span className="badge-credit">by ghaa</span>
+              </div>
             </div>
           </header>
+
+          {/* LEGAL WARNING BANNER */}
+          <div className="legal-banner">
+            <div className="legal-banner-icon">⚠️</div>
+            <div className="legal-banner-text">
+              <strong>PERINGATAN HUKUM:</strong> Menjual tool ini atau output-nya tanpa izin tertulis dari ghaa adalah
+              pelanggaran <strong>UU Hak Cipta No. 28 Tahun 2014</strong>. Pelanggar dapat dikenakan pidana penjara
+              hingga 10 tahun dan denda hingga Rp 4.000.000.000.
+              Tool ini <strong>GRATIS</strong> — laporkan penjual tidak bertanggung jawab ke{" "}
+              <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
+                github.com/KhaizenNomazen
+              </a>
+            </div>
+          </div>
 
           {/* MAIN CONTENT */}
           <div className="main-content">
@@ -910,22 +828,12 @@ export default function Home() {
               <p className="section-sub">
                 Upload file <code>.zip</code> resource pack yang ingin dioptimasi. Semua proses berjalan di browser tanpa upload ke server.
               </p>
-
-              <input
-                type="file"
-                accept=".zip"
-                id="inputFile"
-                className="hidden-input"
-                disabled={isProcessing}
-                onChange={onMainFileChange}
-              />
+              <input type="file" accept=".zip" id="inputFile" className="hidden-input" disabled={isProcessing} onChange={onMainFileChange} />
               <label htmlFor="inputFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
                 <div className="upload-content">
                   <div className="upload-icon">📦</div>
                   <div className="upload-title">{fileName || "Klik untuk memilih file .zip"}</div>
-                  <div className="upload-sub">
-                    {fileName ? `${(file?.size / 1e6).toFixed(2)} MB` : "Proses 100% client-side"}
-                  </div>
+                  <div className="upload-sub">{fileName ? `${(file?.size / 1e6).toFixed(2)} MB` : "Proses 100% client-side"}</div>
                 </div>
               </label>
             </section>
@@ -937,15 +845,10 @@ export default function Home() {
                 <h2>Pilih Mode Optimasi</h2>
               </div>
               <p className="section-sub">Setiap mode memiliki karakteristik optimasi berbeda sesuai kebutuhan device.</p>
-
               <div className="mode-grid">
                 {Object.values(MODES).map((m) => (
-                  <button
-                    key={m.id}
-                    className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
-                    disabled={isProcessing}
-                    onClick={() => setMode(m.id)}
-                  >
+                  <button key={m.id} className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
+                    disabled={isProcessing} onClick={() => setMode(m.id)}>
                     <div className="mode-title-row">
                       <span>{m.label}</span>
                       {mode === m.id && <span className="mode-dot" />}
@@ -967,144 +870,74 @@ export default function Home() {
                 <div className="section-number">3</div>
                 <h2>Fine-tune Resolusi</h2>
               </div>
-              <p className="section-sub">
-                Sesuaikan resolusi dari mode yang dipilih. 100% = standar mode, lebih kecil = lebih ringan, lebih besar = lebih tajam.
-              </p>
-
+              <p className="section-sub">Sesuaikan resolusi dari mode yang dipilih.</p>
               <div className="slider-row">
-                <input
-                  type="range"
-                  min="40"
-                  max="120"
-                  value={resolutionPercent}
+                <input type="range" min="40" max="120" value={resolutionPercent}
                   onChange={(e) => setResolutionPercent(Number(e.target.value))}
-                  className="slider"
-                  disabled={isProcessing}
-                  style={{ "--value": `${((resolutionPercent - 40) / 80) * 100}%` }}
-                />
+                  className="slider" disabled={isProcessing}
+                  style={{ "--value": `${((resolutionPercent - 40) / 80) * 100}%` }} />
                 <div className="slider-value">{resolutionPercent}%</div>
               </div>
-
               <div className="button-row">
-                <button className="primary-button" onClick={() => setResolutionPercent(40)} disabled={isProcessing}>
-                  40%
-                </button>
-                <button className="primary-button" onClick={() => setResolutionPercent(60)} disabled={isProcessing}>
-                  60%
-                </button>
-                <button className="primary-button" onClick={() => setResolutionPercent(80)} disabled={isProcessing}>
-                  80%
-                </button>
-                <button className="primary-button" onClick={() => setResolutionPercent(100)} disabled={isProcessing}>
-                  100%
-                </button>
-                <button className="primary-button" onClick={() => setResolutionPercent(120)} disabled={isProcessing}>
-                  120%
-                </button>
+                {[40, 60, 80, 100, 120].map(v => (
+                  <button key={v} className="primary-button" onClick={() => setResolutionPercent(v)} disabled={isProcessing}>{v}%</button>
+                ))}
               </div>
             </section>
 
-            {/* Pixel Art & OGG */}
+            {/* Opsi Tambahan */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">4</div>
                 <h2>Opsi Tambahan</h2>
               </div>
-
               <div className="checkbox-wrapper">
-                <input
-                  type="checkbox"
-                  id="pixelArt"
-                  checked={preservePixelArt}
-                  onChange={(e) => setPreservePixelArt(e.target.checked)}
-                  disabled={isProcessing}
-                />
-                <label htmlFor="pixelArt">
-                  <strong>Preserve Pixel Art</strong> — Jaga ketajaman GUI/font dengan nearest-neighbor
-                </label>
+                <input type="checkbox" id="pixelArt" checked={preservePixelArt}
+                  onChange={(e) => setPreservePixelArt(e.target.checked)} disabled={isProcessing} />
+                <label htmlFor="pixelArt"><strong>Preserve Pixel Art</strong> — Jaga ketajaman GUI/font</label>
               </div>
-
               <div className="checkbox-wrapper">
-                <input
-                  type="checkbox"
-                  id="oggOpt"
-                  checked={optimizeOgg}
-                  onChange={(e) => setOptimizeOgg(e.target.checked)}
-                  disabled={isProcessing}
-                />
-                <label htmlFor="oggOpt">
-                  <strong>Optimize Sound (.ogg)</strong> — Hapus metadata & padding tanpa re-encode audio
-                </label>
+                <input type="checkbox" id="oggOpt" checked={optimizeOgg}
+                  onChange={(e) => setOptimizeOgg(e.target.checked)} disabled={isProcessing} />
+                <label htmlFor="oggOpt"><strong>Optimize Sound (.ogg)</strong> — Hapus metadata tanpa re-encode</label>
               </div>
             </section>
 
-            {/* Advanced Settings - Collapsible */}
+            {/* Advanced */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">5</div>
                 <h2>Pengaturan Lanjutan</h2>
               </div>
-
-              {/* ZIP Compression */}
               <div style={{ marginBottom: 24 }}>
                 <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>ZIP Compression Level</h3>
-                <p className="section-sub" style={{ marginBottom: 12 }}>
-                  Level 6 = cepat & efisien. Level 9 = ukuran terkecil tapi proses lebih lama.
-                </p>
                 <div className="slider-row">
-                  <input
-                    type="range"
-                    min="1"
-                    max="9"
-                    value={zipCompressionLevel}
+                  <input type="range" min="1" max="9" value={zipCompressionLevel}
                     onChange={(e) => setZipCompressionLevel(Number(e.target.value))}
-                    className="slider"
-                    disabled={isProcessing}
-                    style={{ "--value": `${((zipCompressionLevel - 1) / 8) * 100}%` }}
-                  />
+                    className="slider" disabled={isProcessing}
+                    style={{ "--value": `${((zipCompressionLevel - 1) / 8) * 100}%` }} />
                   <div className="slider-value">Level {zipCompressionLevel}</div>
                 </div>
               </div>
-
-              {/* Workers */}
               <div>
-                <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>Web Workers (PNG Processing)</h3>
-                <p className="section-sub" style={{ marginBottom: 12 }}>
-                  Auto = 2-4 worker (optimal untuk mobile). Manual jika perlu fine-tune.
-                </p>
+                <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>Web Workers</h3>
                 <div className="button-row">
-                  <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(0)}>
-                    Auto ({computedWorkerCount})
-                  </button>
-                  <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(2)}>
-                    2 Workers
-                  </button>
-                  <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(3)}>
-                    3 Workers
-                  </button>
-                  <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(4)}>
-                    4 Workers
-                  </button>
+                  <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(0)}>Auto ({computedWorkerCount})</button>
+                  {[2, 3, 4].map(v => (
+                    <button key={v} className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(v)}>{v} Workers</button>
+                  ))}
                 </div>
               </div>
             </section>
 
-            {/* Icon Pack */}
+            {/* Icon */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">6</div>
                 <h2>Custom Pack Icon</h2>
               </div>
-              <p className="section-sub">Upload gambar untuk dijadikan icon pack (pack.png). Ukuran otomatis di-resize ke 128×128px.</p>
-
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/jpg"
-                id="iconFile"
-                className="hidden-input"
-                disabled={isProcessing}
-                onChange={onIconChange}
-              />
+              <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile"
+                className="hidden-input" disabled={isProcessing} onChange={onIconChange} />
               <label htmlFor="iconFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
                 <div className="upload-content">
                   <div className="upload-icon">🖼️</div>
@@ -1114,29 +947,18 @@ export default function Home() {
               </label>
             </section>
 
-            {/* pack.mcmeta Editor */}
+            {/* mcmeta editor */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">7</div>
                 <h2>pack.mcmeta Editor</h2>
               </div>
-              <p className="section-sub">Edit konten pack.mcmeta jika diperlukan. Perubahan akan disimpan di pack hasil optimasi.</p>
-
-              {mcmetaError && (
-                <p className="section-sub" style={{ color: "#ef4444", marginTop: 8 }}>
-                  {mcmetaError}
-                </p>
-              )}
-
+              <p className="section-sub">Edit konten pack.mcmeta. <strong>Credit ghaa akan otomatis diinjeksi.</strong></p>
+              {mcmetaError && <p className="section-sub" style={{ color: "#ef4444" }}>{mcmetaError}</p>}
               {mcmetaLoaded ? (
-                <textarea
-                  className="mcmeta-textarea"
-                  rows={8}
-                  value={mcmetaText}
-                  onChange={(e) => setMcmetaText(e.target.value)}
-                  disabled={isProcessing}
-                  placeholder='{"pack": {"pack_format": 8, "description": "..."}}'
-                />
+                <textarea className="mcmeta-textarea" rows={8} value={mcmetaText}
+                  onChange={(e) => setMcmetaText(e.target.value)} disabled={isProcessing}
+                  placeholder='{"pack": {"pack_format": 8, "description": "..."}}' />
               ) : (
                 <p className="section-sub" style={{ fontStyle: "italic", marginTop: 12, opacity: 0.6 }}>
                   pack.mcmeta tidak ditemukan atau belum di-load.
@@ -1144,31 +966,19 @@ export default function Home() {
               )}
             </section>
 
-            {/* Pojav Log Auto-Fix */}
+            {/* Pojav Log */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">8</div>
                 <h2>Pojav Log Auto-Fix</h2>
               </div>
-              <p className="section-sub">
-                Upload latestlog.txt dari Pojav untuk auto-detect animated texture yang bermasalah dan otomatis fix.
-              </p>
-
-              <input
-                type="file"
-                accept=".txt"
-                id="logFile"
-                className="hidden-input"
-                disabled={isProcessing}
-                onChange={onLogFileChange}
-              />
+              <input type="file" accept=".txt" id="logFile" className="hidden-input"
+                disabled={isProcessing} onChange={onLogFileChange} />
               <label htmlFor="logFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
                 <div className="upload-content">
                   <div className="upload-icon">📝</div>
                   <div className="upload-title">Klik untuk pilih latestlog.txt</div>
-                  <div className="upload-sub">
-                    Terdeteksi: <strong>{dynamicStripPaths.length}</strong> path enforce-strip dari log
-                  </div>
+                  <div className="upload-sub">Terdeteksi: <strong>{dynamicStripPaths.length}</strong> path enforce-strip</div>
                 </div>
               </label>
             </section>
@@ -1179,16 +989,11 @@ export default function Home() {
                 <div className="section-number">9</div>
                 <h2>Progress</h2>
               </div>
-
               <div className="progress-wrapper">
                 <div className="progress-bar-container">
                   <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%"
-                      }}
-                    />
+                    <div className="progress-bar-fill"
+                      style={{ width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%" }} />
                   </div>
                   <div className="progress-text">
                     {progress.total ? `${progress.done}/${progress.total}` : "0/0"}
@@ -1205,31 +1010,19 @@ export default function Home() {
                   {isProcessing ? "🔄 Sedang mengoptimasi..." : "✨ Optimize Sekarang"}
                 </button>
               </div>
-              {!file && (
-                <p className="small-note" style={{ marginTop: 12, textAlign: "center" }}>
-                  Pilih resource pack terlebih dahulu untuk memulai optimasi
-                </p>
-              )}
             </section>
 
-            {/* Console Log */}
+            {/* Console */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">10</div>
                 <h2>Console Output</h2>
               </div>
-
               <div className="console" ref={logRef}>
                 {logs.length === 0 ? (
-                  <div className="console-placeholder">
-                    Belum ada log. Upload pack dan klik &quot;Optimize Sekarang&quot; untuk memulai.
-                  </div>
+                  <div className="console-placeholder">Belum ada log. Upload pack dan klik &quot;Optimize Sekarang&quot;.</div>
                 ) : (
-                  logs.map((l, i) => (
-                    <div key={i} className="console-line">
-                      {l}
-                    </div>
-                  ))
+                  logs.map((l, i) => <div key={i} className="console-line">{l}</div>)
                 )}
               </div>
             </section>
@@ -1241,62 +1034,47 @@ export default function Home() {
                   <div className="section-number">✓</div>
                   <h2>Hasil Optimasi</h2>
                 </div>
-                <p className="section-sub">Ringkasan hasil optimasi resource pack.</p>
-
                 <div className="summary-grid">
-                  <Summary
-                    label="Ukuran File"
-                    value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`}
-                  />
-                  <Summary
-                    label="Penghematan"
-                    value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`}
-                  />
+                  <Summary label="Ukuran File" value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`} />
+                  <Summary label="Penghematan" value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`} />
                   <Summary label="PNG Optimized" value={`${summary.pngOptimized} / ${summary.pngCount}`} />
-                  <Summary label="PNG Skipped (IHDR)" value={summary.pngSkippedByIHDR} />
-                  {summary.oggCount > 0 && (
-                    <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />
-                  )}
+                  <Summary label="PNG Skipped" value={summary.pngSkippedByIHDR} />
+                  {summary.oggCount > 0 && <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />}
                   <Summary label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
                   <Summary label="Files Removed" value={summary.removed} />
                   <Summary label="Workers Used" value={summary.workers} />
-                  <Summary label="ZIP Level" value={summary.compressionLevel} />
-                  {summary.dynamicStripCount > 0 && (
-                    <Summary label="Auto-Fix Paths" value={summary.dynamicStripCount} />
-                  )}
                   {summary.sha1 && (
-                    <Summary
-                      label="SHA-1 Hash"
-                      value={
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ fontFamily: "monospace", fontSize: 11, wordBreak: "break-all" }}>
-                            {summary.sha1.substring(0, 16)}...
-                          </span>
-                          <button
-                            className="primary-button"
-                            style={{ padding: "4px 12px", fontSize: 11 }}
-                            onClick={() => navigator.clipboard?.writeText(summary.sha1)}
-                          >
-                            Copy
-                          </button>
-                        </div>
-                      }
-                    />
+                    <Summary label="SHA-1 Hash" value={
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 11 }}>{summary.sha1.substring(0, 16)}...</span>
+                        <button className="primary-button" style={{ padding: "4px 12px", fontSize: 11 }}
+                          onClick={() => navigator.clipboard?.writeText(summary.sha1)}>Copy</button>
+                      </div>
+                    } />
                   )}
                 </div>
-
                 <p className="section-sub" style={{ marginTop: 20, textAlign: "center" }}>
-                  ✅ File <code>optimize_file.zip</code> sudah otomatis ter-download
+                  ✅ <code>optimize_file.zip</code> sudah ter-download • Credit ghaa sudah diinjeksi ke dalam pack
                 </p>
               </section>
             )}
           </div>
 
-          {/* Footer */}
+          {/* FOOTER WITH FULL CREDIT */}
           <footer className="footer">
-            <p>Minecraft Pack Optimizer v2.0</p>
-            <p style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
-              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • Client-side Processing
+            <div className="footer-credit-box">
+              <p className="footer-title">⚡ Ghaizers2.0 — Minecraft Pack Optimizer</p>
+              <p className="footer-author">Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen)</p>
+              <p className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</p>
+              <p className="footer-legal">
+                ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun & denda max Rp 4 miliar
+              </p>
+              <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
+                🔗 github.com/KhaizenNomazen — Laporkan penyalahgunaan di sini
+              </a>
+            </div>
+            <p style={{ fontSize: 11, marginTop: 12, opacity: 0.4 }}>
+              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark
             </p>
           </footer>
         </div>
