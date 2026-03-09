@@ -414,6 +414,9 @@ function Summary({ label, value }) {
   );
 }
 
+// ─── SITE KEY (public, aman di frontend) ───
+const TURNSTILE_SITE_KEY = "0x4AAAAAACouWhuLn7V-Z9lo";
+
 export default function Home() {
   const [mode, setMode] = useState("normal");
   const [resolutionPercent, setResolutionPercent] = useState(100);
@@ -436,11 +439,57 @@ export default function Home() {
   const logBufferRef = useRef([]);
   const flushTimerRef = useRef(null);
 
+  // ─── CAPTCHA STATE ───
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaLoading, setCaptchaLoading] = useState(false);
+  const turnstileRef = useRef(null);
+
   const computedWorkerCount = useMemo(() => {
     const hc = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4;
     const suggested = Math.max(2, Math.min(4, Math.floor(hc / 2) || 2));
     return workerCount > 0 ? workerCount : suggested;
   }, [workerCount]);
+
+  // ─── LOAD TURNSTILE SCRIPT ───
+  useEffect(() => {
+    if (document.getElementById("cf-turnstile-script")) return;
+    const script = document.createElement("script");
+    script.id = "cf-turnstile-script";
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+
+    window.__turnstileCallback = async (token) => {
+      setCaptchaLoading(true);
+      try {
+        const res = await fetch("/api/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json();
+        setCaptchaVerified(data.success);
+        if (!data.success) {
+          appendLog("⚠️ Verifikasi CAPTCHA gagal, coba lagi.");
+          // reset widget
+          if (window.turnstile && turnstileRef.current) {
+            window.turnstile.reset(turnstileRef.current);
+          }
+        }
+      } catch {
+        setCaptchaVerified(false);
+        appendLog("⚠️ Error verifikasi CAPTCHA.");
+      } finally {
+        setCaptchaLoading(false);
+      }
+    };
+
+    window.__turnstileExpired = () => {
+      setCaptchaVerified(false);
+      appendLog("⚠️ CAPTCHA expired, silakan verifikasi ulang.");
+    };
+  }, []);
 
   const flushLogs = () => {
     const buf = logBufferRef.current;
@@ -525,12 +574,12 @@ export default function Home() {
 
   const handleOptimize = async () => {
     if (!file) { appendLog("Pilih resource pack (.zip) dulu."); return; }
+    if (!captchaVerified) { appendLog("⚠️ Selesaikan verifikasi CAPTCHA dulu."); return; }
 
     const baseMode = MODES[mode];
     const effectiveScale = baseMode.scale * (resolutionPercent / 100);
     const modeConfig = { ...baseMode, scale: effectiveScale, preservePixelArt };
 
-    // ══════ CREDIT BANNER DI CONSOLE ══════
     CREDIT_BANNER.forEach((line) => appendLog(line));
     appendLog(" ");
 
@@ -541,6 +590,12 @@ export default function Home() {
 
     setIsProcessing(true); setSummary(null);
     setProgress({ done: 0, total: 0, etaSec: null });
+
+    // Reset captcha setelah mulai proses agar harus verify ulang next time
+    setCaptchaVerified(false);
+    if (window.turnstile && turnstileRef.current) {
+      window.turnstile.reset(turnstileRef.current);
+    }
 
     const pool = createWorkerPool(computedWorkerCount);
     const t0 = performance.now();
@@ -587,7 +642,6 @@ export default function Home() {
           continue;
         }
 
-        // ══════ PACK.MCMETA — INJECT CREDIT ══════
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
           const original = await entry.async("string");
@@ -599,13 +653,11 @@ export default function Home() {
 
           try {
             const obj = JSON.parse(toWrite);
-            // Inject watermark credit ke description mcmeta
             const originalDesc = obj?.pack?.description || "";
             obj.pack = obj.pack || {};
             obj.pack._credit = "© ghaa (KhaizenNomazen) | Ghaizers2.0 | GRATIS | Dilarang dijual!";
             obj.pack._legal = "UU Hak Cipta No.28/2014 | Melanggar = pidana & denda";
             obj.pack._source = "github.com/KhaizenNomazen";
-            // Tambah watermark di description Minecraft (dengan §)
             if (typeof originalDesc === "string" && !originalDesc.includes("ghaa")) {
               obj.pack.description = originalDesc
                 ? `${originalDesc} §7| §cOptimized by §aghaa`
@@ -711,7 +763,6 @@ export default function Home() {
         updateProgress();
       }
 
-      // ══════ INJECT FILE CREDIT WAJIB ══════
       outZip.file("GHAIZERS_CREDIT.txt", CREDIT_TXT);
       outZip.file("JANGAN_BAYAR_INI.txt",
         "⚠️  PERINGATAN PENTING!\n\n" +
@@ -789,7 +840,6 @@ export default function Home() {
                 <p>
                   Client-side processing • Chrome Android optimized • Web Workers • IHDR precheck • OGG Safe • SHA-1 verification
                 </p>
-                {/* CREDIT LINE DI HEADER */}
                 <p className="header-credit">
                   Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen) &nbsp;•&nbsp;
                   Tool ini <span className="credit-free">GRATIS</span> selamanya &nbsp;•&nbsp;
@@ -1003,10 +1053,44 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Optimize Button */}
+            {/* ─── CAPTCHA + OPTIMIZE BUTTON ─── */}
             <section className="section">
+              <div className="section-header">
+                <div className="section-number">10</div>
+                <h2>Verifikasi &amp; Optimize</h2>
+              </div>
+              <p className="section-sub">Selesaikan verifikasi di bawah sebelum mengoptimasi.</p>
+
+              {/* Turnstile Widget */}
+              <div style={{ marginTop: 20, marginBottom: 20 }}>
+                <div
+                  ref={turnstileRef}
+                  className="cf-turnstile"
+                  data-sitekey={TURNSTILE_SITE_KEY}
+                  data-callback="__turnstileCallback"
+                  data-expired-callback="__turnstileExpired"
+                  data-theme="dark"
+                />
+              </div>
+
+              {/* Status CAPTCHA */}
+              {captchaLoading && (
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>
+                  🔄 Memverifikasi CAPTCHA...
+                </p>
+              )}
+              {captchaVerified && !captchaLoading && (
+                <p style={{ fontSize: 13, color: "#10b981", marginBottom: 12, fontWeight: 600 }}>
+                  ✅ CAPTCHA terverifikasi — siap optimize!
+                </p>
+              )}
+
               <div className="button-row">
-                <button className="primary-button optimize-button" onClick={handleOptimize} disabled={isProcessing || !file}>
+                <button
+                  className="primary-button optimize-button"
+                  onClick={handleOptimize}
+                  disabled={isProcessing || !file || !captchaVerified}
+                >
                   {isProcessing ? "🔄 Sedang mengoptimasi..." : "✨ Optimize Sekarang"}
                 </button>
               </div>
@@ -1015,7 +1099,7 @@ export default function Home() {
             {/* Console */}
             <section className="section">
               <div className="section-header">
-                <div className="section-number">10</div>
+                <div className="section-number">11</div>
                 <h2>Console Output</h2>
               </div>
               <div className="console" ref={logRef}>
@@ -1060,21 +1144,21 @@ export default function Home() {
             )}
           </div>
 
-          {/* FOOTER WITH FULL CREDIT */}
+          {/* FOOTER */}
           <footer className="footer">
             <div className="footer-credit-box">
               <p className="footer-title">⚡ Ghaizers2.0 — Minecraft Pack Optimizer</p>
               <p className="footer-author">Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen)</p>
               <p className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</p>
               <p className="footer-legal">
-                ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun & denda max Rp 4 miliar
+                ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun &amp; denda max Rp 4 miliar
               </p>
               <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
                 🔗 github.com/KhaizenNomazen — Laporkan penyalahgunaan di sini
               </a>
             </div>
             <p style={{ fontSize: 11, marginTop: 12, opacity: 0.4 }}>
-              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark
+              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark • Protected by Cloudflare Turnstile
             </p>
           </footer>
         </div>
