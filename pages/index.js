@@ -450,16 +450,8 @@ export default function Home() {
     return workerCount > 0 ? workerCount : suggested;
   }, [workerCount]);
 
-  // ─── LOAD TURNSTILE SCRIPT ───
+  // ─── TURNSTILE CALLBACKS (global, dipanggil oleh widget CF) ───
   useEffect(() => {
-    if (document.getElementById("cf-turnstile-script")) return;
-    const script = document.createElement("script");
-    script.id = "cf-turnstile-script";
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-
     window.__turnstileCallback = async (token) => {
       setCaptchaLoading(true);
       try {
@@ -471,15 +463,10 @@ export default function Home() {
         const data = await res.json();
         setCaptchaVerified(data.success);
         if (!data.success) {
-          appendLog("⚠️ Verifikasi CAPTCHA gagal, coba lagi.");
-          // reset widget
-          if (window.turnstile && turnstileRef.current) {
-            window.turnstile.reset(turnstileRef.current);
-          }
+          if (window.turnstile) window.turnstile.reset();
         }
       } catch {
         setCaptchaVerified(false);
-        appendLog("⚠️ Error verifikasi CAPTCHA.");
       } finally {
         setCaptchaLoading(false);
       }
@@ -487,7 +474,6 @@ export default function Home() {
 
     window.__turnstileExpired = () => {
       setCaptchaVerified(false);
-      appendLog("⚠️ CAPTCHA expired, silakan verifikasi ulang.");
     };
   }, []);
 
@@ -591,11 +577,9 @@ export default function Home() {
     setIsProcessing(true); setSummary(null);
     setProgress({ done: 0, total: 0, etaSec: null });
 
-    // Reset captcha setelah mulai proses agar harus verify ulang next time
+    // Reset captcha setelah mulai proses
     setCaptchaVerified(false);
-    if (window.turnstile && turnstileRef.current) {
-      window.turnstile.reset(turnstileRef.current);
-    }
+    if (window.turnstile) window.turnstile.reset();
 
     const pool = createWorkerPool(computedWorkerCount);
     const t0 = performance.now();
@@ -1091,7 +1075,7 @@ export default function Home() {
                   onClick={handleOptimize}
                   disabled={isProcessing || !file || !captchaVerified}
                 >
-                  {isProcessing ? "🔄 Sedang mengoptimasi..." : "✨ Optimize Sekarang"}
+                  {isProcessing ? "🔄 Sedang mengoptimasi..." : !captchaVerified ? "🔒 Verifikasi CAPTCHA dulu" : !file ? "📦 Upload pack dulu" : "✨ Optimize Sekarang"}
                 </button>
               </div>
             </section>
