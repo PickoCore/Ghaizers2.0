@@ -6,7 +6,7 @@ export default function MyApp({ Component, pageProps }) {
     <>
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
       />
       <Component {...pageProps} />
     </>
