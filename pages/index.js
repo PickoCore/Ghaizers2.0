@@ -450,7 +450,7 @@ export default function Home() {
     return workerCount > 0 ? workerCount : suggested;
   }, [workerCount]);
 
-  // ─── TURNSTILE CALLBACKS (global, dipanggil oleh widget CF) ───
+  // ─── TURNSTILE: setup callbacks + render widget manual ───
   useEffect(() => {
     window.__turnstileCallback = async (token) => {
       setCaptchaLoading(true);
@@ -462,9 +462,7 @@ export default function Home() {
         });
         const data = await res.json();
         setCaptchaVerified(data.success);
-        if (!data.success) {
-          if (window.turnstile) window.turnstile.reset();
-        }
+        if (!data.success && window.turnstile) window.turnstile.reset();
       } catch {
         setCaptchaVerified(false);
       } finally {
@@ -475,6 +473,32 @@ export default function Home() {
     window.__turnstileExpired = () => {
       setCaptchaVerified(false);
     };
+
+    // Render widget manual setelah script loaded
+    const renderWidget = () => {
+      if (window.turnstile && turnstileRef.current && !turnstileRef.current.dataset.rendered) {
+        turnstileRef.current.dataset.rendered = "1";
+        window.turnstile.render(turnstileRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          callback: "__turnstileCallback",
+          "expired-callback": "__turnstileExpired",
+          theme: "dark",
+        });
+      }
+    };
+
+    // Coba render sekarang, kalau script belum ready tunggu interval
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const interval = setInterval(() => {
+        if (window.turnstile) {
+          clearInterval(interval);
+          renderWidget();
+        }
+      }, 200);
+      return () => clearInterval(interval);
+    }
   }, []);
 
   const flushLogs = () => {
@@ -1047,14 +1071,7 @@ export default function Home() {
 
               {/* Turnstile Widget */}
               <div style={{ marginTop: 20, marginBottom: 20 }}>
-                <div
-                  ref={turnstileRef}
-                  className="cf-turnstile"
-                  data-sitekey={TURNSTILE_SITE_KEY}
-                  data-callback="__turnstileCallback"
-                  data-expired-callback="__turnstileExpired"
-                  data-theme="dark"
-                />
+                <div ref={turnstileRef} id="turnstile-container" />
               </div>
 
               {/* Status CAPTCHA */}
