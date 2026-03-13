@@ -61,40 +61,31 @@ Tool ini dibuat GRATIS oleh ghaa untuk komunitas Minecraft.
 const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di optimizer.ghaa.my.id";
 
 /* =========================
-   MODE PRESET (dasar)
+   MODE PRESET
 ========================= */
 const MODES = {
   normal: {
     id: "normal",
     label: "Normal",
     description: "Seimbang, kualitas bagus dan pack tetap ringan.",
-    scale: 0.85,
-    maxSize: 512,
-    minSize: 16,
-    minifyJson: true
+    scale: 0.85, maxSize: 512, minSize: 16, minifyJson: true
   },
   extreme: {
     id: "extreme",
     label: "Extreme",
     description: "Sangat hemat, cocok untuk device mid–low.",
-    scale: 0.6,
-    maxSize: 256,
-    minSize: 8,
-    minifyJson: true
+    scale: 0.6, maxSize: 256, minSize: 8, minifyJson: true
   },
   ultra: {
     id: "ultra",
     label: "Ultra Extreme",
     description: "Paling ringan, untuk HP kentang / Pojav lemah.",
-    scale: 0.4,
-    maxSize: 128,
-    minSize: 4,
-    minifyJson: true
+    scale: 0.4, maxSize: 128, minSize: 4, minifyJson: true
   }
 };
 
 /* =========================
-   POLICY STATIS PER KATEGORI
+   POLICY PER KATEGORI
 ========================= */
 const BASE_POLICIES = [
   { pattern: /textures\/gui\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0 },
@@ -111,52 +102,25 @@ function getPolicyForPath(lowerPath, dynamicStripPaths) {
   if (Array.isArray(dynamicStripPaths)) {
     for (let i = 0; i < dynamicStripPaths.length; i++) {
       const key = dynamicStripPaths[i];
-      if (key && lowerPath.includes(key)) {
-        return { enforceStrip: true, smoothing: "smooth" };
-      }
+      if (key && lowerPath.includes(key)) return { enforceStrip: true, smoothing: "smooth" };
     }
   }
   for (let i = 0; i < BASE_POLICIES.length; i++) {
-    if (BASE_POLICIES[i].pattern.test(lowerPath)) {
-      return { ...BASE_POLICIES[i] };
-    }
+    if (BASE_POLICIES[i].pattern.test(lowerPath)) return { ...BASE_POLICIES[i] };
   }
   return { scaleMul: 1.0 };
 }
 
 function shouldExcludeNonGameFile(lower) {
-  if (
-    lower.endsWith(".psd") ||
-    lower.endsWith(".xcf") ||
-    lower.endsWith(".txt") ||
-    lower.endsWith(".md") ||
-    lower.endsWith(".bak") ||
-    lower.endsWith(".zip")
-  )
-    return true;
-
-  if (
-    lower.endsWith(".png") ||
-    lower.endsWith(".json") ||
-    lower.endsWith(".mcmeta") ||
-    lower.endsWith(".properties") ||
-    lower.endsWith(".ogg")
-  )
-    return false;
-
-  if (
-    lower.includes("/raw/") ||
-    lower.includes("/backup/") ||
-    lower.includes("/unused/") ||
-    lower.includes("/temp/")
-  ) {
-    if (
-      lower.endsWith(".png") ||
-      lower.endsWith(".json") ||
-      lower.endsWith(".mcmeta") ||
-      lower.endsWith(".ogg")
-    )
-      return false;
+  if (lower.endsWith(".psd") || lower.endsWith(".xcf") || lower.endsWith(".txt") ||
+    lower.endsWith(".md") || lower.endsWith(".bak") || lower.endsWith(".zip")) return true;
+  if (lower.endsWith(".png") || lower.endsWith(".json") || lower.endsWith(".mcmeta") ||
+    lower.endsWith(".properties") || lower.endsWith(".ogg") ||
+    lower.endsWith(".fsh") || lower.endsWith(".vsh") || lower.endsWith(".glsl")) return false;
+  if (lower.includes("/raw/") || lower.includes("/backup/") ||
+    lower.includes("/unused/") || lower.includes("/temp/")) {
+    if (lower.endsWith(".png") || lower.endsWith(".json") ||
+      lower.endsWith(".mcmeta") || lower.endsWith(".ogg")) return false;
     return true;
   }
   return false;
@@ -197,8 +161,7 @@ function readPngIHDRSize(buffer) {
     if (u8.length < 24) return null;
     const sig = [137, 80, 78, 71, 13, 10, 26, 10];
     for (let i = 0; i < 8; i++) if (u8[i] !== sig[i]) return null;
-    const type =
-      String.fromCharCode(u8[12]) + String.fromCharCode(u8[13]) +
+    const type = String.fromCharCode(u8[12]) + String.fromCharCode(u8[13]) +
       String.fromCharCode(u8[14]) + String.fromCharCode(u8[15]);
     if (type !== "IHDR") return null;
     const dv = new DataView(buffer);
@@ -210,11 +173,105 @@ function readPngIHDRSize(buffer) {
 }
 
 function detectAnimatedStrip(width, height) {
-  if (!width || !height) return null;
-  if (height <= width) return null;
+  if (!width || !height || height <= width) return null;
   const frames = height / width;
   if (!Number.isInteger(frames) || frames < 2) return null;
   return frames;
+}
+
+/* =========================
+   [NEW] MINIFY SHADER/PROPERTIES
+   Hapus komentar & whitespace berlebih
+========================= */
+function minifyShader(text) {
+  try {
+    // Hapus // line comments (hati-hati jangan hapus URL)
+    let result = text
+      .replace(/\/\/[^\n]*/g, "")           // hapus // comments
+      .replace(/\/\*[\s\S]*?\*\//g, "")     // hapus /* */ comments
+      .replace(/[ \t]+/g, " ")              // collapse spaces/tabs
+      .replace(/\n\s*\n/g, "\n")            // hapus blank lines
+      .trim();
+    return result;
+  } catch { return text; }
+}
+
+function minifyProperties(text) {
+  try {
+    return text
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith("#") && !line.startsWith("!"))
+      .join("\n");
+  } catch { return text; }
+}
+
+/* =========================
+   [NEW] JSON DEEP CLEAN
+   Hapus field komentar & optimize sounds.json
+========================= */
+function deepCleanJson(obj, lowerPath) {
+  if (!obj || typeof obj !== "object") return obj;
+
+  // Hapus field comment yang tidak dipakai MC
+  const COMMENT_KEYS = ["__comment", "_comment", "//", "comment", "__credits", "__author"];
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepCleanJson(item, lowerPath));
+  }
+
+  const cleaned = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (COMMENT_KEYS.includes(k)) continue; // buang field comment
+    cleaned[k] = deepCleanJson(v, lowerPath);
+  }
+
+  // Khusus sounds.json: hapus entry dengan sounds array kosong
+  if (lowerPath.endsWith("sounds.json")) {
+    for (const [k, v] of Object.entries(cleaned)) {
+      if (v && typeof v === "object" && Array.isArray(v.sounds) && v.sounds.length === 0) {
+        delete cleaned[k];
+      }
+    }
+  }
+
+  return cleaned;
+}
+
+/* =========================
+   [NEW] PNG ALPHA CLEANUP
+   Zero out RGB of fully-transparent pixels
+   → reduces PNG entropy → better ZIP compression
+   Aman 100%, tidak mengubah visual
+========================= */
+function cleanAlphaPixels(imageData) {
+  const d = imageData.data;
+  let cleaned = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) {
+      // Pixel fully transparent — zero RGB supaya entropy rendah
+      if (d[i] !== 0 || d[i + 1] !== 0 || d[i + 2] !== 0) {
+        d[i] = 0; d[i + 1] = 0; d[i + 2] = 0;
+        cleaned++;
+      }
+    }
+  }
+  return cleaned;
+}
+
+/* =========================
+   [NEW] SINGLE-COLOR PNG DETECTION
+   Jika semua pixel sama warna → resize ke 1×1
+   Teknik dari PackSquash — aman dan sangat efektif
+========================= */
+function isSingleColorImage(imageData) {
+  const d = imageData.data;
+  if (d.length < 4) return false;
+  const r0 = d[0], g0 = d[1], b0 = d[2], a0 = d[3];
+  for (let i = 4; i < d.length; i += 4) {
+    if (d[i] !== r0 || d[i + 1] !== g0 || d[i + 2] !== b0 || d[i + 3] !== a0) return false;
+  }
+  return true;
 }
 
 async function optimizeOggSafe(buffer) {
@@ -223,19 +280,21 @@ async function optimizeOggSafe(buffer) {
     const len = bytes.length;
     if (len < 16) return { out: buffer, changed: false };
     let start = 0, end = len, changed = false;
+    // Strip ID3 header jika ada
     if (len >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
-      const size =
-        ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) |
+      const size = ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) |
         ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f);
       const headerLen = 10 + size;
       if (headerLen < end) { start = headerLen; changed = true; }
     }
+    // Strip ID3v1 tag di akhir
     if (end - start > 128) {
       const tagPos = end - 128;
       if (bytes[tagPos] === 0x54 && bytes[tagPos + 1] === 0x41 && bytes[tagPos + 2] === 0x47) {
         end = tagPos; changed = true;
       }
     }
+    // Strip null padding di akhir
     while (end > start && bytes[end - 1] === 0x00) { end--; changed = true; }
     if (!changed || end <= start) return { out: buffer, changed: false };
     const trimmed = bytes.subarray(start, end);
@@ -257,22 +316,17 @@ async function buildPackIcon(file) {
   const scale = Math.min(target / img.width, target / img.height, 1);
   const dw = Math.round(img.width * scale);
   const dh = Math.round(img.height * scale);
-  const ox = Math.floor((target - dw) / 2);
-  const oy = Math.floor((target - dh) / 2);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, ox, oy, dw, dh);
-  const outBlob = await new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b || blob), "image/png", 0.92)
-  );
+  ctx.drawImage(img, Math.floor((target - dw) / 2), Math.floor((target - dh) / 2), dw, dh);
+  const outBlob = await new Promise(r => canvas.toBlob(b => r(b || blob), "image/png", 0.92));
   return await outBlob.arrayBuffer();
 }
 
 async function sha1HexFromBlob(blob) {
   try {
     if (typeof window === "undefined" || !window.crypto?.subtle) return null;
-    const ab = await blob.arrayBuffer();
-    const hash = await window.crypto.subtle.digest("SHA-1", ab);
+    const hash = await window.crypto.subtle.digest("SHA-1", await blob.arrayBuffer());
     const bytes = new Uint8Array(hash);
     let hex = "";
     for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
@@ -289,34 +343,92 @@ function triggerDownload(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+/* =========================
+   WEB WORKER PNG
+   [UPGRADED] Tambah alpha cleanup + single-color detect
+========================= */
 function makePngWorkerURL() {
   const workerCode = `
+    // === Alpha Cleanup ===
+    function cleanAlphaPixels(data) {
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i+3] === 0 && (data[i] || data[i+1] || data[i+2])) {
+          data[i] = 0; data[i+1] = 0; data[i+2] = 0; n++;
+        }
+      }
+      return n;
+    }
+
+    // === Single Color Detection ===
+    function isSingleColor(data) {
+      if (data.length < 4) return false;
+      const r=data[0],g=data[1],b=data[2],a=data[3];
+      for (let i=4; i<data.length; i+=4) {
+        if (data[i]!==r||data[i+1]!==g||data[i+2]!==b||data[i+3]!==a) return false;
+      }
+      return true;
+    }
+
     self.onmessage = async (ev) => {
       const msg = ev.data;
       if (!msg || msg.type !== "png") return;
-      const { id, buffer, w0, h0, tW, tH, smoothing, sizeGuard } = msg;
+      const { id, buffer, w0, h0, tW, tH, smoothing, sizeGuard, doAlphaClean, doSingleColor } = msg;
       try {
-        if (!buffer || !tW || !tH || (tW === w0 && tH === h0)) {
-          self.postMessage({ id, ok: true, out: buffer, changed: false }, buffer ? [buffer] : []);
+        if (!buffer) {
+          self.postMessage({ id, ok: true, out: buffer, changed: false }, []);
           return;
         }
         const originalSize = buffer.byteLength || 0;
         const blob = new Blob([buffer], { type: "image/png" });
         const bmp = await createImageBitmap(blob);
-        const canvas = new OffscreenCanvas(tW, tH);
+
+        // --- Single Color Check (before resize) ---
+        if (doSingleColor && w0 > 1 && h0 > 1) {
+          const checkCanvas = new OffscreenCanvas(w0, h0);
+          const checkCtx = checkCanvas.getContext("2d");
+          checkCtx.drawImage(bmp, 0, 0);
+          const checkData = checkCtx.getImageData(0, 0, w0, h0).data;
+          if (isSingleColor(checkData)) {
+            // Downsize ke 1x1
+            const sc = new OffscreenCanvas(1, 1);
+            const scCtx = sc.getContext("2d");
+            scCtx.drawImage(bmp, 0, 0, 1, 1);
+            const scBlob = await sc.convertToBlob({ type: "image/png" });
+            const scBuf = await scBlob.arrayBuffer();
+            self.postMessage({ id, ok: true, out: scBuf, changed: true, singleColor: true }, [scBuf]);
+            return;
+          }
+        }
+
+        // --- Resize ---
+        const noResize = (tW === w0 && tH === h0);
+        const canvas = new OffscreenCanvas(noResize ? w0 : tW, noResize ? h0 : tH);
         const ctx = canvas.getContext("2d");
         const nearest = smoothing === "nearest";
         ctx.imageSmoothingEnabled = !nearest;
         ctx.imageSmoothingQuality = nearest ? "low" : "high";
-        ctx.clearRect(0, 0, tW, tH);
-        ctx.drawImage(bmp, 0, 0, tW, tH);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+
+        // --- Alpha Cleanup ---
+        let alphaFixed = 0;
+        if (doAlphaClean) {
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          alphaFixed = cleanAlphaPixels(imgData.data);
+          if (alphaFixed > 0) ctx.putImageData(imgData, 0, 0);
+        }
+
         const outBlob = await canvas.convertToBlob({ type: "image/png" });
         const outBuf = await outBlob.arrayBuffer();
-        if (sizeGuard && outBuf.byteLength >= originalSize) {
+
+        if (sizeGuard && !noResize && outBuf.byteLength >= originalSize && alphaFixed === 0) {
           self.postMessage({ id, ok: true, out: buffer, changed: false, guarded: true }, [buffer]);
           return;
         }
-        self.postMessage({ id, ok: true, out: outBuf, changed: true, guarded: false }, [outBuf]);
+
+        const changed = !noResize || alphaFixed > 0;
+        self.postMessage({ id, ok: true, out: outBuf, changed, alphaFixed }, [outBuf]);
       } catch (e) {
         try {
           self.postMessage({ id, ok: false, error: String(e?.message || e), out: buffer, changed: false }, [buffer]);
@@ -337,9 +449,9 @@ function createWorkerPool(size) {
   function spawn() {
     const w = new Worker(url);
     w.onmessage = (ev) => {
-      const { id, ok, out, changed, guarded, error } = ev.data || {};
+      const { id, ok, out, changed, guarded, error, singleColor, alphaFixed } = ev.data || {};
       const cb = pending.get(id);
-      if (cb) { pending.delete(id); cb.resolve({ ok, out, changed, guarded, error }); }
+      if (cb) { pending.delete(id); cb.resolve({ ok, out, changed, guarded, error, singleColor, alphaFixed }); }
       free.push(w); pump();
     };
     w.onerror = () => { free.push(w); pump(); };
@@ -421,6 +533,12 @@ export default function Home() {
   const [optimizeOgg, setOptimizeOgg] = useState(true);
   const [zipCompressionLevel, setZipCompressionLevel] = useState(6);
   const [workerCount, setWorkerCount] = useState(0);
+  // [NEW] Opsi baru
+  const [doAlphaClean, setDoAlphaClean] = useState(true);
+  const [doSingleColor, setDoSingleColor] = useState(true);
+  const [doDeepCleanJson, setDoDeepCleanJson] = useState(true);
+  const [doShaderMinify, setDoShaderMinify] = useState(true);
+
   const [logs, setLogs] = useState([]);
   const logRef = useRef(null);
   const [fileName, setFileName] = useState("");
@@ -445,28 +563,20 @@ export default function Home() {
   const flushLogs = () => {
     const buf = logBufferRef.current;
     if (!buf.length) return;
-    setLogs((prev) => [...prev, ...buf.splice(0, buf.length)]);
-    setTimeout(() => {
-      if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-    }, 10);
+    setLogs(prev => [...prev, ...buf.splice(0, buf.length)]);
+    setTimeout(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, 10);
   };
 
   const appendLog = (msg) => {
     const time = new Date().toLocaleTimeString();
     logBufferRef.current.push(`[${time}] ${msg}`);
     if (!flushTimerRef.current) {
-      flushTimerRef.current = setTimeout(() => {
-        flushTimerRef.current = null;
-        flushLogs();
-      }, 250);
+      flushTimerRef.current = setTimeout(() => { flushTimerRef.current = null; flushLogs(); }, 250);
     }
   };
 
   useEffect(() => {
-    return () => {
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    };
+    return () => { if (flushTimerRef.current) clearTimeout(flushTimerRef.current); };
   }, []);
 
   const onMainFileChange = async (e) => {
@@ -494,7 +604,7 @@ export default function Home() {
     const parsed = parsePojavLog(text);
     if (parsed.enforceStrip.length > 0) {
       appendLog(`Auto-Fix: ${parsed.enforceStrip.length} path akan di-enforce strip.`);
-      setDynamicStripPaths((prev) => uniqueLower([...prev, ...parsed.enforceStrip]));
+      setDynamicStripPaths(prev => uniqueLower([...prev, ...parsed.enforceStrip]));
     } else {
       appendLog("Auto-Fix: tidak ada path animated strip bermasalah di log.");
     }
@@ -508,11 +618,10 @@ export default function Home() {
       appendLog("Membaca pack.mcmeta dari ZIP...");
       const zip = await JSZip.loadAsync(f);
       const entries = Object.values(zip.files);
-      const mcmetaEntry = entries.find((e) => e.name.toLowerCase() === "pack.mcmeta");
+      const mcmetaEntry = entries.find(e => e.name.toLowerCase() === "pack.mcmeta");
       if (!mcmetaEntry) {
         appendLog("pack.mcmeta tidak ditemukan di root pack.");
-        setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError("");
-        return;
+        setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError(""); return;
       }
       const text = await mcmetaEntry.async("string");
       setMcmetaText(text); setMcmetaLoaded(true); setMcmetaError("");
@@ -530,13 +639,14 @@ export default function Home() {
     const effectiveScale = baseMode.scale * (resolutionPercent / 100);
     const modeConfig = { ...baseMode, scale: effectiveScale, preservePixelArt };
 
-    CREDIT_BANNER.forEach((line) => appendLog(line));
+    CREDIT_BANNER.forEach(line => appendLog(line));
     appendLog(" ");
-
     appendLog(`Mode: ${baseMode.label}`);
     appendLog(`Scale efektif: ${(effectiveScale * 100).toFixed(0)}% (slider ${resolutionPercent}%)`);
     appendLog(`Workers: ${computedWorkerCount}`);
     appendLog(`ZIP compression level: ${zipCompressionLevel}`);
+    appendLog(`Alpha Cleanup: ${doAlphaClean ? "ON" : "OFF"} | Single-Color Detect: ${doSingleColor ? "ON" : "OFF"}`);
+    appendLog(`Deep JSON Clean: ${doDeepCleanJson ? "ON" : "OFF"} | Shader Minify: ${doShaderMinify ? "ON" : "OFF"}`);
 
     setIsProcessing(true); setSummary(null);
     setProgress({ done: 0, total: 0, etaSec: null });
@@ -553,10 +663,14 @@ export default function Home() {
 
       const stats = {
         totalFiles: 0, pngCount: 0, pngOptimized: 0, pngSkippedByIHDR: 0,
-        jsonCount: 0, jsonMinified: 0, removed: 0, oggCount: 0, oggOptimized: 0
+        pngSingleColor: 0, pngAlphaCleaned: 0,
+        jsonCount: 0, jsonMinified: 0, jsonDeepCleaned: 0,
+        removed: 0, oggCount: 0, oggOptimized: 0,
+        shaderCount: 0, shaderMinified: 0,
+        oversizedWarnings: 0
       };
 
-      const totalToProcess = entries.filter((e) => !e.dir).length;
+      const totalToProcess = entries.filter(e => !e.dir).length;
       setProgress({ done: 0, total: totalToProcess, etaSec: null });
 
       let done = 0;
@@ -566,9 +680,7 @@ export default function Home() {
         const rate = done / Math.max(0.001, elapsed);
         const left = Math.max(0, totalToProcess - done);
         const etaSec = rate > 0 ? Math.round(left / rate) : null;
-        if (done % 20 === 0 || done === totalToProcess) {
-          setProgress({ done, total: totalToProcess, etaSec });
-        }
+        if (done % 20 === 0 || done === totalToProcess) setProgress({ done, total: totalToProcess, etaSec });
       };
 
       for (let idx = 0; idx < entries.length; idx++) {
@@ -579,13 +691,45 @@ export default function Home() {
         const lower = name.toLowerCase();
         stats.totalFiles++;
 
+        // ── Buang file non-game ──
         if (shouldExcludeNonGameFile(lower)) {
           stats.removed++;
           appendLog(`Dibuang (non-game): ${name}`);
-          updateProgress();
-          continue;
+          updateProgress(); continue;
         }
 
+        // ── Shader / GLSL ──
+        if (lower.endsWith(".fsh") || lower.endsWith(".vsh") || lower.endsWith(".glsl")) {
+          stats.shaderCount++;
+          if (doShaderMinify) {
+            const text = await entry.async("string");
+            const minified = minifyShader(text);
+            outZip.file(name, minified);
+            if (minified.length < text.length) {
+              stats.shaderMinified++;
+              appendLog(`Shader minified: ${name} (${text.length}→${minified.length} chars)`);
+            } else {
+              outZip.file(name, text);
+            }
+          } else {
+            outZip.file(name, await entry.async("arraybuffer"));
+          }
+          updateProgress(); continue;
+        }
+
+        // ── .properties (OptiFine) ──
+        if (lower.endsWith(".properties")) {
+          if (doShaderMinify) {
+            const text = await entry.async("string");
+            const minified = minifyProperties(text);
+            outZip.file(name, minified);
+          } else {
+            outZip.file(name, await entry.async("arraybuffer"));
+          }
+          updateProgress(); continue;
+        }
+
+        // ── pack.mcmeta ──
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
           const original = await entry.async("string");
@@ -594,9 +738,9 @@ export default function Home() {
             toWrite = mcmetaText;
             appendLog("Menggunakan pack.mcmeta hasil edit user.");
           }
-
           try {
-            const obj = JSON.parse(toWrite);
+            let obj = JSON.parse(toWrite);
+            if (doDeepCleanJson) obj = deepCleanJson(obj, lower);
             const originalDesc = obj?.pack?.description || "";
             obj.pack = obj.pack || {};
             obj.pack._credit = "© ghaa (KhaizenNomazen) | Ghaizers2.0 | GRATIS | Dilarang dijual!";
@@ -607,51 +751,42 @@ export default function Home() {
                 ? `${originalDesc} §7| §cOptimized by §aghaa`
                 : CREDIT_MCMETA_DESC;
             }
-            if (modeConfig.minifyJson) {
-              outZip.file(name, JSON.stringify(obj));
-            } else {
-              outZip.file(name, JSON.stringify(obj, null, 2));
-            }
+            outZip.file(name, modeConfig.minifyJson ? JSON.stringify(obj) : JSON.stringify(obj, null, 2));
             stats.jsonMinified++;
             appendLog("pack.mcmeta: credit & watermark injected ✔");
           } catch {
             outZip.file(name, toWrite);
             appendLog("pack.mcmeta bukan JSON valid, ditulis apa adanya.");
           }
-          updateProgress();
-          continue;
+          updateProgress(); continue;
         }
 
+        // ── OGG ──
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
           if (optimizeOgg) {
             const { out, changed } = await optimizeOggSafe(buf);
-            if (changed) {
-              stats.oggOptimized++;
-              appendLog(`OGG safe optimized: ${name}`);
-            }
+            if (changed) { stats.oggOptimized++; appendLog(`OGG safe optimized: ${name}`); }
             outZip.file(name, out);
           } else {
             outZip.file(name, buf);
           }
-          updateProgress();
-          continue;
+          updateProgress(); continue;
         }
 
+        // ── PNG ──
         if (lower.endsWith(".png")) {
           stats.pngCount++;
           const policy = getPolicyForPath(lower, dynamicStripPaths);
           if (!preservePixelArt && policy.smoothing === "nearest") policy.smoothing = "smooth";
 
           if (policy.skip) {
-            const buf = await entry.async("arraybuffer");
-            outZip.file(name, buf);
+            outZip.file(name, await entry.async("arraybuffer"));
             updateProgress(); continue;
           }
           if (policy.skipResize) {
-            const buf = await entry.async("arraybuffer");
-            outZip.file(name, buf);
+            outZip.file(name, await entry.async("arraybuffer"));
             updateProgress(); continue;
           }
 
@@ -666,31 +801,49 @@ export default function Home() {
           if (!sz) { outZip.file(name, buf); updateProgress(); continue; }
 
           const { w: w0, h: h0 } = sz;
-          const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
 
-          if (tW === w0 && tH === h0) {
-            outZip.file(name, buf);
-            stats.pngSkippedByIHDR++;
-            updateProgress(); continue;
+          // [NEW] Oversized texture warning (Microsoft recommends max 256px non-entity untuk mobile)
+          if (w0 > 1024 || h0 > 1024) {
+            stats.oversizedWarnings++;
+            appendLog(`⚠️ Oversized: ${name} (${w0}x${h0}) — akan diresize`);
           }
 
-          const res = await pool.runPngJob({ buffer: buf, w0, h0, tW, tH, smoothing, sizeGuard: true });
+          const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
 
-          if (res?.changed) {
+          const res = await pool.runPngJob({
+            buffer: buf, w0, h0, tW, tH, smoothing,
+            sizeGuard: true,
+            doAlphaClean,     // [NEW]
+            doSingleColor     // [NEW]
+          });
+
+          if (res?.singleColor) {
+            stats.pngSingleColor++;
             stats.pngOptimized++;
-            appendLog(`PNG resized: ${name} (${w0}x${h0} → ${tW}x${tH})`);
+            appendLog(`PNG single-color → 1×1: ${name}`);
+          } else if (res?.changed) {
+            stats.pngOptimized++;
+            if (res.alphaFixed > 0) stats.pngAlphaCleaned++;
+            if (tW !== w0 || tH !== h0) appendLog(`PNG resized: ${name} (${w0}x${h0} → ${tW}x${tH})`);
+            else if (res.alphaFixed > 0) appendLog(`PNG alpha cleaned: ${name} (${res.alphaFixed} px)`);
           }
 
           outZip.file(name, res?.out || buf);
           updateProgress(); continue;
         }
 
-        if (lower.endsWith(".json")) {
+        // ── JSON (semua selain pack.mcmeta) ──
+        if (lower.endsWith(".json") || lower.endsWith(".mcmeta")) {
           stats.jsonCount++;
           const text = await entry.async("string");
           if (modeConfig.minifyJson) {
             try {
-              const obj = JSON.parse(text);
+              let obj = JSON.parse(text);
+              if (doDeepCleanJson) {
+                const before = JSON.stringify(obj).length;
+                obj = deepCleanJson(obj, lower);
+                if (JSON.stringify(obj).length < before) stats.jsonDeepCleaned++;
+              }
               outZip.file(name, JSON.stringify(obj));
               stats.jsonMinified++;
             } catch {
@@ -702,11 +855,12 @@ export default function Home() {
           updateProgress(); continue;
         }
 
-        const content = await entry.async("arraybuffer");
-        outZip.file(name, content);
+        // ── File lain (copy as-is) ──
+        outZip.file(name, await entry.async("arraybuffer"));
         updateProgress();
       }
 
+      // Inject credit files
       outZip.file("GHAIZERS_CREDIT.txt", CREDIT_TXT);
       outZip.file("JANGAN_BAYAR_INI.txt",
         "⚠️  PERINGATAN PENTING!\n\n" +
@@ -718,12 +872,11 @@ export default function Home() {
         "Menjual tool/output ini tanpa izin = MELANGGAR UU Hak Cipta No. 28 Tahun 2014\n" +
         "Pelanggar dapat dipidana penjara & denda miliaran rupiah."
       );
-      appendLog("Credit files injected: GHAIZERS_CREDIT.txt + JANGAN_BAYAR_INI.txt ✔");
+      appendLog("Credit files injected ✔");
 
       if (iconFile) {
         appendLog("Menambahkan / override pack.png dari icon upload...");
-        const iconBuffer = await buildPackIcon(iconFile);
-        outZip.file("pack.png", iconBuffer);
+        outZip.file("pack.png", await buildPackIcon(iconFile));
       }
 
       appendLog("Menyusun ZIP hasil optimasi...");
@@ -738,7 +891,7 @@ export default function Home() {
       if (sha1) appendLog(`SHA-1 hasil: ${sha1}`);
 
       appendLog(" ");
-      CREDIT_BANNER.forEach((line) => appendLog(line));
+      CREDIT_BANNER.forEach(line => appendLog(line));
       appendLog("Selesai ✔ Menyiapkan download...");
       triggerDownload(optimizedBlob, "optimize_file.zip");
 
@@ -766,24 +919,18 @@ export default function Home() {
       <div className="background-orbit bg-2" />
       <div className="background-gradient" />
 
-      {/* WATERMARK STRIP TOP */}
       <div className="watermark-topbar">
         ⚠️ Tool ini 100% GRATIS oleh <strong>ghaa</strong> — Jika kamu membayar untuk ini, kamu DITIPU! &nbsp;|&nbsp;
-        <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
-          github.com/KhaizenNomazen
-        </a>
+        <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
       </div>
 
       <main className="container">
         <div className="glass-card">
-          {/* HEADER */}
           <header className="header">
             <div className="header-content">
               <div className="header-left">
                 <h1>Minecraft Pack Optimizer</h1>
-                <p>
-                  Client-side processing • Chrome Android optimized • Web Workers • IHDR precheck • OGG Safe • SHA-1 verification
-                </p>
+                <p>Client-side processing • Chrome Android optimized • Web Workers • IHDR precheck • OGG Safe • Alpha Cleanup • Single-Color Detect • SHA-1</p>
                 <p className="header-credit">
                   Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen) &nbsp;•&nbsp;
                   Tool ini <span className="credit-free">GRATIS</span> selamanya &nbsp;•&nbsp;
@@ -797,31 +944,22 @@ export default function Home() {
             </div>
           </header>
 
-          {/* LEGAL WARNING BANNER */}
           <div className="legal-banner">
             <div className="legal-banner-icon">⚠️</div>
             <div className="legal-banner-text">
               <strong>PERINGATAN HUKUM:</strong> Menjual tool ini atau output-nya tanpa izin tertulis dari ghaa adalah
               pelanggaran <strong>UU Hak Cipta No. 28 Tahun 2014</strong>. Pelanggar dapat dikenakan pidana penjara
               hingga 10 tahun dan denda hingga Rp 4.000.000.000.
-              Tool ini <strong>GRATIS</strong> — laporkan penjual tidak bertanggung jawab ke{" "}
-              <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
-                github.com/KhaizenNomazen
-              </a>
+              Tool ini <strong>GRATIS</strong> — laporkan penjual ke{" "}
+              <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
             </div>
           </div>
 
-          {/* MAIN CONTENT */}
           <div className="main-content">
-            {/* Upload Pack */}
+            {/* 1. Upload */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">1</div>
-                <h2>Upload Resource Pack</h2>
-              </div>
-              <p className="section-sub">
-                Upload file <code>.zip</code> resource pack yang ingin dioptimasi. Semua proses berjalan di browser tanpa upload ke server.
-              </p>
+              <div className="section-header"><div className="section-number">1</div><h2>Upload Resource Pack</h2></div>
+              <p className="section-sub">Upload file <code>.zip</code> resource pack. Semua proses berjalan di browser.</p>
               <input type="file" accept=".zip" id="inputFile" className="hidden-input" disabled={isProcessing} onChange={onMainFileChange} />
               <label htmlFor="inputFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
                 <div className="upload-content">
@@ -832,21 +970,15 @@ export default function Home() {
               </label>
             </section>
 
-            {/* Mode */}
+            {/* 2. Mode */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">2</div>
-                <h2>Pilih Mode Optimasi</h2>
-              </div>
+              <div className="section-header"><div className="section-number">2</div><h2>Pilih Mode Optimasi</h2></div>
               <p className="section-sub">Setiap mode memiliki karakteristik optimasi berbeda sesuai kebutuhan device.</p>
               <div className="mode-grid">
-                {Object.values(MODES).map((m) => (
+                {Object.values(MODES).map(m => (
                   <button key={m.id} className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
                     disabled={isProcessing} onClick={() => setMode(m.id)}>
-                    <div className="mode-title-row">
-                      <span>{m.label}</span>
-                      {mode === m.id && <span className="mode-dot" />}
-                    </div>
+                    <div className="mode-title-row"><span>{m.label}</span>{mode === m.id && <span className="mode-dot" />}</div>
                     <p className="mode-desc">{m.description}</p>
                     <ul className="mode-meta">
                       <li>Scale: {Math.round(m.scale * 100)}%</li>
@@ -858,16 +990,13 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Slider */}
+            {/* 3. Slider */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">3</div>
-                <h2>Fine-tune Resolusi</h2>
-              </div>
+              <div className="section-header"><div className="section-number">3</div><h2>Fine-tune Resolusi</h2></div>
               <p className="section-sub">Sesuaikan resolusi dari mode yang dipilih.</p>
               <div className="slider-row">
                 <input type="range" min="40" max="120" value={resolutionPercent}
-                  onChange={(e) => setResolutionPercent(Number(e.target.value))}
+                  onChange={e => setResolutionPercent(Number(e.target.value))}
                   className="slider" disabled={isProcessing}
                   style={{ "--value": `${((resolutionPercent - 40) / 80) * 100}%` }} />
                 <div className="slider-value">{resolutionPercent}%</div>
@@ -879,35 +1008,43 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Opsi Tambahan */}
+            {/* 4. Opsi */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">4</div>
-                <h2>Opsi Tambahan</h2>
-              </div>
+              <div className="section-header"><div className="section-number">4</div><h2>Opsi Optimasi</h2></div>
               <div className="checkbox-wrapper">
-                <input type="checkbox" id="pixelArt" checked={preservePixelArt}
-                  onChange={(e) => setPreservePixelArt(e.target.checked)} disabled={isProcessing} />
+                <input type="checkbox" id="pixelArt" checked={preservePixelArt} onChange={e => setPreservePixelArt(e.target.checked)} disabled={isProcessing} />
                 <label htmlFor="pixelArt"><strong>Preserve Pixel Art</strong> — Jaga ketajaman GUI/font</label>
               </div>
               <div className="checkbox-wrapper">
-                <input type="checkbox" id="oggOpt" checked={optimizeOgg}
-                  onChange={(e) => setOptimizeOgg(e.target.checked)} disabled={isProcessing} />
+                <input type="checkbox" id="oggOpt" checked={optimizeOgg} onChange={e => setOptimizeOgg(e.target.checked)} disabled={isProcessing} />
                 <label htmlFor="oggOpt"><strong>Optimize Sound (.ogg)</strong> — Hapus metadata tanpa re-encode</label>
+              </div>
+              <div className="checkbox-wrapper">
+                <input type="checkbox" id="alphaClean" checked={doAlphaClean} onChange={e => setDoAlphaClean(e.target.checked)} disabled={isProcessing} />
+                <label htmlFor="alphaClean"><strong>Alpha Pixel Cleanup</strong> — Zero RGB transparan pixel → ZIP lebih kecil (aman, no visual loss)</label>
+              </div>
+              <div className="checkbox-wrapper">
+                <input type="checkbox" id="singleColor" checked={doSingleColor} onChange={e => setDoSingleColor(e.target.checked)} disabled={isProcessing} />
+                <label htmlFor="singleColor"><strong>Single-Color Detect</strong> — PNG solid 1 warna → resize ke 1×1 (teknik PackSquash)</label>
+              </div>
+              <div className="checkbox-wrapper">
+                <input type="checkbox" id="deepJson" checked={doDeepCleanJson} onChange={e => setDoDeepCleanJson(e.target.checked)} disabled={isProcessing} />
+                <label htmlFor="deepJson"><strong>Deep JSON Clean</strong> — Hapus field __comment, entry sounds kosong, dll</label>
+              </div>
+              <div className="checkbox-wrapper">
+                <input type="checkbox" id="shaderMin" checked={doShaderMinify} onChange={e => setDoShaderMinify(e.target.checked)} disabled={isProcessing} />
+                <label htmlFor="shaderMin"><strong>Shader/Properties Minify</strong> — Minify .fsh/.vsh/.glsl/.properties (OptiFine support)</label>
               </div>
             </section>
 
-            {/* Advanced */}
+            {/* 5. Advanced */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">5</div>
-                <h2>Pengaturan Lanjutan</h2>
-              </div>
+              <div className="section-header"><div className="section-number">5</div><h2>Pengaturan Lanjutan</h2></div>
               <div style={{ marginBottom: 24 }}>
                 <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>ZIP Compression Level</h3>
                 <div className="slider-row">
                   <input type="range" min="1" max="9" value={zipCompressionLevel}
-                    onChange={(e) => setZipCompressionLevel(Number(e.target.value))}
+                    onChange={e => setZipCompressionLevel(Number(e.target.value))}
                     className="slider" disabled={isProcessing}
                     style={{ "--value": `${((zipCompressionLevel - 1) / 8) * 100}%` }} />
                   <div className="slider-value">Level {zipCompressionLevel}</div>
@@ -924,14 +1061,10 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Icon */}
+            {/* 6. Icon */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">6</div>
-                <h2>Custom Pack Icon</h2>
-              </div>
-              <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile"
-                className="hidden-input" disabled={isProcessing} onChange={onIconChange} />
+              <div className="section-header"><div className="section-number">6</div><h2>Custom Pack Icon</h2></div>
+              <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile" className="hidden-input" disabled={isProcessing} onChange={onIconChange} />
               <label htmlFor="iconFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
                 <div className="upload-content">
                   <div className="upload-icon">🖼️</div>
@@ -941,17 +1074,14 @@ export default function Home() {
               </label>
             </section>
 
-            {/* mcmeta editor */}
+            {/* 7. mcmeta */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">7</div>
-                <h2>pack.mcmeta Editor</h2>
-              </div>
+              <div className="section-header"><div className="section-number">7</div><h2>pack.mcmeta Editor</h2></div>
               <p className="section-sub">Edit konten pack.mcmeta. <strong>Credit ghaa akan otomatis diinjeksi.</strong></p>
               {mcmetaError && <p className="section-sub" style={{ color: "#ef4444" }}>{mcmetaError}</p>}
               {mcmetaLoaded ? (
                 <textarea className="mcmeta-textarea" rows={8} value={mcmetaText}
-                  onChange={(e) => setMcmetaText(e.target.value)} disabled={isProcessing}
+                  onChange={e => setMcmetaText(e.target.value)} disabled={isProcessing}
                   placeholder='{"pack": {"pack_format": 8, "description": "..."}}' />
               ) : (
                 <p className="section-sub" style={{ fontStyle: "italic", marginTop: 12, opacity: 0.6 }}>
@@ -960,14 +1090,10 @@ export default function Home() {
               )}
             </section>
 
-            {/* Pojav Log */}
+            {/* 8. Pojav Log */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">8</div>
-                <h2>Pojav Log Auto-Fix</h2>
-              </div>
-              <input type="file" accept=".txt" id="logFile" className="hidden-input"
-                disabled={isProcessing} onChange={onLogFileChange} />
+              <div className="section-header"><div className="section-number">8</div><h2>Pojav Log Auto-Fix</h2></div>
+              <input type="file" accept=".txt" id="logFile" className="hidden-input" disabled={isProcessing} onChange={onLogFileChange} />
               <label htmlFor="logFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
                 <div className="upload-content">
                   <div className="upload-icon">📝</div>
@@ -977,12 +1103,9 @@ export default function Home() {
               </label>
             </section>
 
-            {/* Progress */}
+            {/* 9. Progress */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">9</div>
-                <h2>Progress</h2>
-              </div>
+              <div className="section-header"><div className="section-number">9</div><h2>Progress</h2></div>
               <div className="progress-wrapper">
                 <div className="progress-bar-container">
                   <div className="progress-bar">
@@ -997,29 +1120,20 @@ export default function Home() {
               </div>
             </section>
 
-            {/* OPTIMIZE BUTTON */}
+            {/* 10. Optimize */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">10</div>
-                <h2>Optimize</h2>
-              </div>
+              <div className="section-header"><div className="section-number">10</div><h2>Optimize</h2></div>
               <div className="button-row">
-                <button
-                  className="primary-button optimize-button"
-                  onClick={handleOptimize}
-                  disabled={isProcessing || !file}
-                >
+                <button className="primary-button optimize-button" onClick={handleOptimize}
+                  disabled={isProcessing || !file}>
                   {isProcessing ? "🔄 Sedang mengoptimasi..." : !file ? "📦 Upload pack dulu" : "✨ Optimize Sekarang"}
                 </button>
               </div>
             </section>
 
-            {/* Console */}
+            {/* 11. Console */}
             <section className="section">
-              <div className="section-header">
-                <div className="section-number">11</div>
-                <h2>Console Output</h2>
-              </div>
+              <div className="section-header"><div className="section-number">11</div><h2>Console Output</h2></div>
               <div className="console" ref={logRef}>
                 {logs.length === 0 ? (
                   <div className="console-placeholder">Belum ada log. Upload pack dan klik &quot;Optimize Sekarang&quot;.</div>
@@ -1032,17 +1146,19 @@ export default function Home() {
             {/* Summary */}
             {summary && (
               <section className="section">
-                <div className="section-header">
-                  <div className="section-number">✓</div>
-                  <h2>Hasil Optimasi</h2>
-                </div>
+                <div className="section-header"><div className="section-number">✓</div><h2>Hasil Optimasi</h2></div>
                 <div className="summary-grid">
                   <Summary label="Ukuran File" value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`} />
                   <Summary label="Penghematan" value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`} />
                   <Summary label="PNG Optimized" value={`${summary.pngOptimized} / ${summary.pngCount}`} />
                   <Summary label="PNG Skipped" value={summary.pngSkippedByIHDR} />
+                  {summary.pngSingleColor > 0 && <Summary label="PNG Single-Color→1×1" value={summary.pngSingleColor} />}
+                  {summary.pngAlphaCleaned > 0 && <Summary label="PNG Alpha Cleaned" value={summary.pngAlphaCleaned} />}
                   {summary.oggCount > 0 && <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />}
                   <Summary label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
+                  {summary.jsonDeepCleaned > 0 && <Summary label="JSON Deep Cleaned" value={summary.jsonDeepCleaned} />}
+                  {summary.shaderCount > 0 && <Summary label="Shader Minified" value={`${summary.shaderMinified} / ${summary.shaderCount}`} />}
+                  {summary.oversizedWarnings > 0 && <Summary label="⚠️ Oversized Textures" value={summary.oversizedWarnings} />}
                   <Summary label="Files Removed" value={summary.removed} />
                   <Summary label="Workers Used" value={summary.workers} />
                   {summary.sha1 && (
@@ -1062,21 +1178,18 @@ export default function Home() {
             )}
           </div>
 
-          {/* FOOTER */}
           <footer className="footer">
             <div className="footer-credit-box">
               <p className="footer-title">⚡ Ghaizers2.0 — Minecraft Pack Optimizer</p>
               <p className="footer-author">Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen)</p>
               <p className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</p>
-              <p className="footer-legal">
-                ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun &amp; denda max Rp 4 miliar
-              </p>
+              <p className="footer-legal">⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun &amp; denda max Rp 4 miliar</p>
               <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
                 🔗 github.com/KhaizenNomazen — Laporkan penyalahgunaan di sini
               </a>
             </div>
             <p style={{ fontSize: 11, marginTop: 12, opacity: 0.4 }}>
-              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark
+              IHDR Skip • Web Workers • OGG Safe • Alpha Cleanup • Single-Color Detect • Deep JSON Clean • Shader Minify • SHA-1 • Size Guard • ZIP Comment Watermark
             </p>
           </footer>
         </div>
