@@ -414,9 +414,6 @@ function Summary({ label, value }) {
   );
 }
 
-// ─── SITE KEY (public, aman di frontend) ───
-const TURNSTILE_SITE_KEY = "0x4AAAAAACouWhuLn7V-Z9lo";
-
 export default function Home() {
   const [mode, setMode] = useState("normal");
   const [resolutionPercent, setResolutionPercent] = useState(100);
@@ -439,66 +436,11 @@ export default function Home() {
   const logBufferRef = useRef([]);
   const flushTimerRef = useRef(null);
 
-  // ─── CAPTCHA STATE ───
-  const [captchaVerified, setCaptchaVerified] = useState(false);
-  const [captchaLoading, setCaptchaLoading] = useState(false);
-  const turnstileRef = useRef(null);
-
   const computedWorkerCount = useMemo(() => {
     const hc = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4;
     const suggested = Math.max(2, Math.min(4, Math.floor(hc / 2) || 2));
     return workerCount > 0 ? workerCount : suggested;
   }, [workerCount]);
-
-  // ─── TURNSTILE: setup callbacks + render widget manual ───
-  useEffect(() => {
-    // Assign callbacks ke window DULU sebelum render
-    window.__turnstileCallback = async (token) => {
-      setCaptchaLoading(true);
-      try {
-        const res = await fetch("/api/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        const data = await res.json();
-        setCaptchaVerified(data.success);
-        if (!data.success && window.turnstile) window.turnstile.reset();
-      } catch {
-        setCaptchaVerified(false);
-      } finally {
-        setCaptchaLoading(false);
-      }
-    };
-
-    window.__turnstileExpired = () => {
-      setCaptchaVerified(false);
-    };
-
-    const renderWidget = () => {
-      if (window.turnstile && turnstileRef.current && !turnstileRef.current.dataset.rendered) {
-        turnstileRef.current.dataset.rendered = "1";
-        window.turnstile.render(turnstileRef.current, {
-          sitekey: TURNSTILE_SITE_KEY,
-          callback: window.__turnstileCallback,           // ✅ function reference
-          "expired-callback": window.__turnstileExpired,  // ✅ function reference
-          theme: "dark",
-        });
-      }
-    };
-
-    if (window.turnstile) {
-      renderWidget();
-    } else {
-      const interval = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(interval);
-          renderWidget();
-        }
-      }, 200);
-      return () => clearInterval(interval);
-    }
-  }, []);
 
   const flushLogs = () => {
     const buf = logBufferRef.current;
@@ -583,7 +525,6 @@ export default function Home() {
 
   const handleOptimize = async () => {
     if (!file) { appendLog("Pilih resource pack (.zip) dulu."); return; }
-    if (!captchaVerified) { appendLog("⚠️ Selesaikan verifikasi CAPTCHA dulu."); return; }
 
     const baseMode = MODES[mode];
     const effectiveScale = baseMode.scale * (resolutionPercent / 100);
@@ -599,10 +540,6 @@ export default function Home() {
 
     setIsProcessing(true); setSummary(null);
     setProgress({ done: 0, total: 0, etaSec: null });
-
-    // Reset captcha setelah mulai proses
-    setCaptchaVerified(false);
-    if (window.turnstile) window.turnstile.reset();
 
     const pool = createWorkerPool(computedWorkerCount);
     const t0 = performance.now();
@@ -1060,38 +997,19 @@ export default function Home() {
               </div>
             </section>
 
-            {/* ─── CAPTCHA + OPTIMIZE BUTTON ─── */}
+            {/* OPTIMIZE BUTTON */}
             <section className="section">
               <div className="section-header">
                 <div className="section-number">10</div>
-                <h2>Verifikasi &amp; Optimize</h2>
+                <h2>Optimize</h2>
               </div>
-              <p className="section-sub">Selesaikan verifikasi di bawah sebelum mengoptimasi.</p>
-
-              {/* Turnstile Widget */}
-              <div style={{ marginTop: 20, marginBottom: 20 }}>
-                <div ref={turnstileRef} id="turnstile-container" />
-              </div>
-
-              {/* Status CAPTCHA */}
-              {captchaLoading && (
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>
-                  🔄 Memverifikasi CAPTCHA...
-                </p>
-              )}
-              {captchaVerified && !captchaLoading && (
-                <p style={{ fontSize: 13, color: "#10b981", marginBottom: 12, fontWeight: 600 }}>
-                  ✅ CAPTCHA terverifikasi — siap optimize!
-                </p>
-              )}
-
               <div className="button-row">
                 <button
                   className="primary-button optimize-button"
                   onClick={handleOptimize}
-                  disabled={isProcessing || !file || !captchaVerified}
+                  disabled={isProcessing || !file}
                 >
-                  {isProcessing ? "🔄 Sedang mengoptimasi..." : !captchaVerified ? "🔒 Verifikasi CAPTCHA dulu" : !file ? "📦 Upload pack dulu" : "✨ Optimize Sekarang"}
+                  {isProcessing ? "🔄 Sedang mengoptimasi..." : !file ? "📦 Upload pack dulu" : "✨ Optimize Sekarang"}
                 </button>
               </div>
             </section>
@@ -1158,7 +1076,7 @@ export default function Home() {
               </a>
             </div>
             <p style={{ fontSize: 11, marginTop: 12, opacity: 0.4 }}>
-              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark • Protected by Cloudflare Turnstile
+              IHDR Skip • Web Workers • OGG Safe • SHA-1 • Size Guard • ZIP Comment Watermark
             </p>
           </footer>
         </div>
