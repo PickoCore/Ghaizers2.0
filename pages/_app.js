@@ -1,13 +1,12 @@
 import "../styles/globals.css";
-import Script from "next/script";
+import Head from "next/head";
 
 export default function MyApp({ Component, pageProps }) {
   return (
     <>
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="afterInteractive"
-      />
+      <Head>
+        <meta name="google-site-verification" content="_TodwBix_GYhoYVAnOn-h5r_xxK17EWlp6wiUiLVQ0k" />
+      </Head>
       <Component {...pageProps} />
     </>
   );
