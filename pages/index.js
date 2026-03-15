@@ -1,11 +1,10 @@
+import Head from "next/head";
 import { useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 
 /* =========================
    CREDIT & WATERMARK
    © 2025 ghaa (KhaizenNomazen)
-   Tool ini GRATIS. Dilarang keras dijual.
-   Pelanggaran = terjerat hukum (UU Hak Cipta)
 ========================= */
 const CREDIT_BANNER = [
   "╔══════════════════════════════════════════════════╗",
@@ -60,33 +59,12 @@ Tool ini dibuat GRATIS oleh ghaa untuk komunitas Minecraft.
 
 const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di optimizer.ghaa.my.id";
 
-/* =========================
-   MODE PRESET
-========================= */
 const MODES = {
-  normal: {
-    id: "normal",
-    label: "Normal",
-    description: "Seimbang, kualitas bagus dan pack tetap ringan.",
-    scale: 0.85, maxSize: 512, minSize: 16, minifyJson: true
-  },
-  extreme: {
-    id: "extreme",
-    label: "Extreme",
-    description: "Sangat hemat, cocok untuk device mid–low.",
-    scale: 0.6, maxSize: 256, minSize: 8, minifyJson: true
-  },
-  ultra: {
-    id: "ultra",
-    label: "Ultra Extreme",
-    description: "Paling ringan, untuk HP kentang / Pojav lemah.",
-    scale: 0.4, maxSize: 128, minSize: 4, minifyJson: true
-  }
+  normal: { id: "normal", label: "Normal", description: "Seimbang, kualitas bagus dan pack tetap ringan.", scale: 0.85, maxSize: 512, minSize: 16, minifyJson: true },
+  extreme: { id: "extreme", label: "Extreme", description: "Sangat hemat, cocok untuk device mid–low.", scale: 0.6, maxSize: 256, minSize: 8, minifyJson: true },
+  ultra: { id: "ultra", label: "Ultra Extreme", description: "Paling ringan, untuk HP kentang / Pojav lemah.", scale: 0.4, maxSize: 128, minSize: 4, minifyJson: true }
 };
 
-/* =========================
-   POLICY PER KATEGORI
-========================= */
 const BASE_POLICIES = [
   { pattern: /textures\/gui\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0 },
   { pattern: /textures\/font\//, smoothing: "nearest", minSize: 16, scaleMul: 1.0, skipResize: true },
@@ -146,8 +124,7 @@ function parsePojavLog(text) {
 }
 
 function uniqueLower(arr) {
-  const s = new Set();
-  const out = [];
+  const s = new Set(); const out = [];
   for (let i = 0; i < arr.length; i++) {
     const v = (arr[i] || "").toLowerCase();
     if (!s.has(v)) { s.add(v); out.push(v); }
@@ -179,99 +156,40 @@ function detectAnimatedStrip(width, height) {
   return frames;
 }
 
-/* =========================
-   [NEW] MINIFY SHADER/PROPERTIES
-   Hapus komentar & whitespace berlebih
-========================= */
 function minifyShader(text) {
   try {
-    // Hapus // line comments (hati-hati jangan hapus URL)
-    let result = text
-      .replace(/\/\/[^\n]*/g, "")           // hapus // comments
-      .replace(/\/\*[\s\S]*?\*\//g, "")     // hapus /* */ comments
-      .replace(/[ \t]+/g, " ")              // collapse spaces/tabs
-      .replace(/\n\s*\n/g, "\n")            // hapus blank lines
+    return text
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n\s*\n/g, "\n")
       .trim();
-    return result;
   } catch { return text; }
 }
 
 function minifyProperties(text) {
   try {
-    return text
-      .split("\n")
-      .map(line => line.trim())
-      .filter(line => line && !line.startsWith("#") && !line.startsWith("!"))
+    return text.split("\n").map(l => l.trim())
+      .filter(l => l && !l.startsWith("#") && !l.startsWith("!"))
       .join("\n");
   } catch { return text; }
 }
 
-/* =========================
-   [NEW] JSON DEEP CLEAN
-   Hapus field komentar & optimize sounds.json
-========================= */
 function deepCleanJson(obj, lowerPath) {
   if (!obj || typeof obj !== "object") return obj;
-
-  // Hapus field comment yang tidak dipakai MC
   const COMMENT_KEYS = ["__comment", "_comment", "//", "comment", "__credits", "__author"];
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => deepCleanJson(item, lowerPath));
-  }
-
+  if (Array.isArray(obj)) return obj.map(item => deepCleanJson(item, lowerPath));
   const cleaned = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (COMMENT_KEYS.includes(k)) continue; // buang field comment
+    if (COMMENT_KEYS.includes(k)) continue;
     cleaned[k] = deepCleanJson(v, lowerPath);
   }
-
-  // Khusus sounds.json: hapus entry dengan sounds array kosong
   if (lowerPath.endsWith("sounds.json")) {
     for (const [k, v] of Object.entries(cleaned)) {
-      if (v && typeof v === "object" && Array.isArray(v.sounds) && v.sounds.length === 0) {
-        delete cleaned[k];
-      }
-    }
-  }
-
-  return cleaned;
-}
-
-/* =========================
-   [NEW] PNG ALPHA CLEANUP
-   Zero out RGB of fully-transparent pixels
-   → reduces PNG entropy → better ZIP compression
-   Aman 100%, tidak mengubah visual
-========================= */
-function cleanAlphaPixels(imageData) {
-  const d = imageData.data;
-  let cleaned = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3] === 0) {
-      // Pixel fully transparent — zero RGB supaya entropy rendah
-      if (d[i] !== 0 || d[i + 1] !== 0 || d[i + 2] !== 0) {
-        d[i] = 0; d[i + 1] = 0; d[i + 2] = 0;
-        cleaned++;
-      }
+      if (v && typeof v === "object" && Array.isArray(v.sounds) && v.sounds.length === 0) delete cleaned[k];
     }
   }
   return cleaned;
-}
-
-/* =========================
-   [NEW] SINGLE-COLOR PNG DETECTION
-   Jika semua pixel sama warna → resize ke 1×1
-   Teknik dari PackSquash — aman dan sangat efektif
-========================= */
-function isSingleColorImage(imageData) {
-  const d = imageData.data;
-  if (d.length < 4) return false;
-  const r0 = d[0], g0 = d[1], b0 = d[2], a0 = d[3];
-  for (let i = 4; i < d.length; i += 4) {
-    if (d[i] !== r0 || d[i + 1] !== g0 || d[i + 2] !== b0 || d[i + 3] !== a0) return false;
-  }
-  return true;
 }
 
 async function optimizeOggSafe(buffer) {
@@ -280,21 +198,18 @@ async function optimizeOggSafe(buffer) {
     const len = bytes.length;
     if (len < 16) return { out: buffer, changed: false };
     let start = 0, end = len, changed = false;
-    // Strip ID3 header jika ada
     if (len >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
       const size = ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) |
         ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f);
       const headerLen = 10 + size;
       if (headerLen < end) { start = headerLen; changed = true; }
     }
-    // Strip ID3v1 tag di akhir
     if (end - start > 128) {
       const tagPos = end - 128;
       if (bytes[tagPos] === 0x54 && bytes[tagPos + 1] === 0x41 && bytes[tagPos + 2] === 0x47) {
         end = tagPos; changed = true;
       }
     }
-    // Strip null padding di akhir
     while (end > start && bytes[end - 1] === 0x00) { end--; changed = true; }
     if (!changed || end <= start) return { out: buffer, changed: false };
     const trimmed = bytes.subarray(start, end);
@@ -343,13 +258,8 @@ function triggerDownload(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-/* =========================
-   WEB WORKER PNG
-   [UPGRADED] Tambah alpha cleanup + single-color detect
-========================= */
 function makePngWorkerURL() {
   const workerCode = `
-    // === Alpha Cleanup ===
     function cleanAlphaPixels(data) {
       let n = 0;
       for (let i = 0; i < data.length; i += 4) {
@@ -359,8 +269,6 @@ function makePngWorkerURL() {
       }
       return n;
     }
-
-    // === Single Color Detection ===
     function isSingleColor(data) {
       if (data.length < 4) return false;
       const r=data[0],g=data[1],b=data[2],a=data[3];
@@ -369,28 +277,21 @@ function makePngWorkerURL() {
       }
       return true;
     }
-
     self.onmessage = async (ev) => {
       const msg = ev.data;
       if (!msg || msg.type !== "png") return;
       const { id, buffer, w0, h0, tW, tH, smoothing, sizeGuard, doAlphaClean, doSingleColor } = msg;
       try {
-        if (!buffer) {
-          self.postMessage({ id, ok: true, out: buffer, changed: false }, []);
-          return;
-        }
+        if (!buffer) { self.postMessage({ id, ok: true, out: buffer, changed: false }, []); return; }
         const originalSize = buffer.byteLength || 0;
         const blob = new Blob([buffer], { type: "image/png" });
         const bmp = await createImageBitmap(blob);
-
-        // --- Single Color Check (before resize) ---
         if (doSingleColor && w0 > 1 && h0 > 1) {
           const checkCanvas = new OffscreenCanvas(w0, h0);
           const checkCtx = checkCanvas.getContext("2d");
           checkCtx.drawImage(bmp, 0, 0);
           const checkData = checkCtx.getImageData(0, 0, w0, h0).data;
           if (isSingleColor(checkData)) {
-            // Downsize ke 1x1
             const sc = new OffscreenCanvas(1, 1);
             const scCtx = sc.getContext("2d");
             scCtx.drawImage(bmp, 0, 0, 1, 1);
@@ -400,8 +301,6 @@ function makePngWorkerURL() {
             return;
           }
         }
-
-        // --- Resize ---
         const noResize = (tW === w0 && tH === h0);
         const canvas = new OffscreenCanvas(noResize ? w0 : tW, noResize ? h0 : tH);
         const ctx = canvas.getContext("2d");
@@ -410,31 +309,23 @@ function makePngWorkerURL() {
         ctx.imageSmoothingQuality = nearest ? "low" : "high";
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-
-        // --- Alpha Cleanup ---
         let alphaFixed = 0;
         if (doAlphaClean) {
           const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           alphaFixed = cleanAlphaPixels(imgData.data);
           if (alphaFixed > 0) ctx.putImageData(imgData, 0, 0);
         }
-
         const outBlob = await canvas.convertToBlob({ type: "image/png" });
         const outBuf = await outBlob.arrayBuffer();
-
         if (sizeGuard && !noResize && outBuf.byteLength >= originalSize && alphaFixed === 0) {
           self.postMessage({ id, ok: true, out: buffer, changed: false, guarded: true }, [buffer]);
           return;
         }
-
         const changed = !noResize || alphaFixed > 0;
         self.postMessage({ id, ok: true, out: outBuf, changed, alphaFixed }, [outBuf]);
       } catch (e) {
-        try {
-          self.postMessage({ id, ok: false, error: String(e?.message || e), out: buffer, changed: false }, [buffer]);
-        } catch {
-          self.postMessage({ id, ok: false, error: String(e?.message || e), out: null, changed: false });
-        }
+        try { self.postMessage({ id, ok: false, error: String(e?.message || e), out: buffer, changed: false }, [buffer]); }
+        catch { self.postMessage({ id, ok: false, error: String(e?.message || e), out: null, changed: false }); }
       }
     };
   `;
@@ -461,8 +352,7 @@ function createWorkerPool(size) {
   const queue = [];
   function pump() {
     while (free.length > 0 && queue.length > 0) {
-      const w = free.pop();
-      const job = queue.shift();
+      const w = free.pop(); const job = queue.shift();
       pending.set(job.id, job);
       w.postMessage(job.payload, [job.payload.buffer]);
     }
@@ -474,10 +364,7 @@ function createWorkerPool(size) {
       pump();
     });
   }
-  function destroy() {
-    for (const w of workers) w.terminate();
-    URL.revokeObjectURL(url);
-  }
+  function destroy() { for (const w of workers) w.terminate(); URL.revokeObjectURL(url); }
   return { runPngJob, destroy };
 }
 
@@ -500,17 +387,9 @@ function computeTargetSize({ w0, h0, policy, modeConfig }) {
   } else {
     let hScaled = Math.round(h0 * baseScale);
     let maxSide = Math.max(tW, hScaled);
-    if (maxSide > maxSize) {
-      const fac = maxSize / maxSide;
-      tW = Math.round(tW * fac);
-      hScaled = Math.round(hScaled * fac);
-    }
+    if (maxSide > maxSize) { const fac = maxSize / maxSide; tW = Math.round(tW * fac); hScaled = Math.round(hScaled * fac); }
     let minSide = Math.min(tW, hScaled);
-    if (minSide < minAllowed) {
-      const fac = minAllowed / minSide;
-      tW = Math.round(tW * fac);
-      hScaled = Math.round(hScaled * fac);
-    }
+    if (minSide < minAllowed) { const fac = minAllowed / minSide; tW = Math.round(tW * fac); hScaled = Math.round(hScaled * fac); }
     tH = hScaled;
   }
   const smoothing = policy.smoothing || (modeConfig.preservePixelArt ? "nearest" : "smooth");
@@ -533,12 +412,10 @@ export default function Home() {
   const [optimizeOgg, setOptimizeOgg] = useState(true);
   const [zipCompressionLevel, setZipCompressionLevel] = useState(6);
   const [workerCount, setWorkerCount] = useState(0);
-  // [NEW] Opsi baru
   const [doAlphaClean, setDoAlphaClean] = useState(true);
   const [doSingleColor, setDoSingleColor] = useState(true);
   const [doDeepCleanJson, setDoDeepCleanJson] = useState(true);
   const [doShaderMinify, setDoShaderMinify] = useState(true);
-
   const [logs, setLogs] = useState([]);
   const logRef = useRef(null);
   const [fileName, setFileName] = useState("");
@@ -575,9 +452,7 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    return () => { if (flushTimerRef.current) clearTimeout(flushTimerRef.current); };
-  }, []);
+  useEffect(() => { return () => { if (flushTimerRef.current) clearTimeout(flushTimerRef.current); }; }, []);
 
   const onMainFileChange = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -593,8 +468,7 @@ export default function Home() {
   const onIconChange = (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
-    setIconFile(f);
-    appendLog(`Icon pack dipilih: ${f.name}`);
+    setIconFile(f); appendLog(`Icon pack dipilih: ${f.name}`);
   };
 
   const onLogFileChange = async (e) => {
@@ -605,12 +479,8 @@ export default function Home() {
     if (parsed.enforceStrip.length > 0) {
       appendLog(`Auto-Fix: ${parsed.enforceStrip.length} path akan di-enforce strip.`);
       setDynamicStripPaths(prev => uniqueLower([...prev, ...parsed.enforceStrip]));
-    } else {
-      appendLog("Auto-Fix: tidak ada path animated strip bermasalah di log.");
-    }
-    if (parsed.missing.length > 0) {
-      appendLog(`Missing sprite terdeteksi (${parsed.missing.length}) — ini masalah pack asli, bukan optimizer.`);
-    }
+    } else { appendLog("Auto-Fix: tidak ada path animated strip bermasalah di log."); }
+    if (parsed.missing.length > 0) appendLog(`Missing sprite terdeteksi (${parsed.missing.length}) — ini masalah pack asli.`);
   };
 
   const inspectZipForMcmeta = async (f) => {
@@ -619,13 +489,10 @@ export default function Home() {
       const zip = await JSZip.loadAsync(f);
       const entries = Object.values(zip.files);
       const mcmetaEntry = entries.find(e => e.name.toLowerCase() === "pack.mcmeta");
-      if (!mcmetaEntry) {
-        appendLog("pack.mcmeta tidak ditemukan di root pack.");
-        setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError(""); return;
-      }
+      if (!mcmetaEntry) { appendLog("pack.mcmeta tidak ditemukan."); setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError(""); return; }
       const text = await mcmetaEntry.async("string");
       setMcmetaText(text); setMcmetaLoaded(true); setMcmetaError("");
-      appendLog("pack.mcmeta berhasil dibaca. Kamu bisa mengeditnya.");
+      appendLog("pack.mcmeta berhasil dibaca.");
     } catch (e) {
       setMcmetaLoaded(false); setMcmetaText(""); setMcmetaError("Gagal membaca pack.mcmeta");
       appendLog("Gagal membaca pack.mcmeta: " + e.message);
@@ -643,10 +510,8 @@ export default function Home() {
     appendLog(" ");
     appendLog(`Mode: ${baseMode.label}`);
     appendLog(`Scale efektif: ${(effectiveScale * 100).toFixed(0)}% (slider ${resolutionPercent}%)`);
-    appendLog(`Workers: ${computedWorkerCount}`);
-    appendLog(`ZIP compression level: ${zipCompressionLevel}`);
-    appendLog(`Alpha Cleanup: ${doAlphaClean ? "ON" : "OFF"} | Single-Color Detect: ${doSingleColor ? "ON" : "OFF"}`);
-    appendLog(`Deep JSON Clean: ${doDeepCleanJson ? "ON" : "OFF"} | Shader Minify: ${doShaderMinify ? "ON" : "OFF"}`);
+    appendLog(`Workers: ${computedWorkerCount} | ZIP Level: ${zipCompressionLevel}`);
+    appendLog(`Alpha: ${doAlphaClean?"ON":"OFF"} | SingleColor: ${doSingleColor?"ON":"OFF"} | DeepJSON: ${doDeepCleanJson?"ON":"OFF"} | Shader: ${doShaderMinify?"ON":"OFF"}`);
 
     setIsProcessing(true); setSummary(null);
     setProgress({ done: 0, total: 0, etaSec: null });
@@ -660,14 +525,12 @@ export default function Home() {
 
       const outZip = new JSZip();
       const entries = Object.values(zip.files);
-
       const stats = {
         totalFiles: 0, pngCount: 0, pngOptimized: 0, pngSkippedByIHDR: 0,
         pngSingleColor: 0, pngAlphaCleaned: 0,
         jsonCount: 0, jsonMinified: 0, jsonDeepCleaned: 0,
         removed: 0, oggCount: 0, oggOptimized: 0,
-        shaderCount: 0, shaderMinified: 0,
-        oversizedWarnings: 0
+        shaderCount: 0, shaderMinified: 0, oversizedWarnings: 0
       };
 
       const totalToProcess = entries.filter(e => !e.dir).length;
@@ -686,58 +549,36 @@ export default function Home() {
       for (let idx = 0; idx < entries.length; idx++) {
         const entry = entries[idx];
         if (entry.dir) { outZip.folder(entry.name); continue; }
-
         const name = entry.name;
         const lower = name.toLowerCase();
         stats.totalFiles++;
 
-        // ── Buang file non-game ──
         if (shouldExcludeNonGameFile(lower)) {
-          stats.removed++;
-          appendLog(`Dibuang (non-game): ${name}`);
-          updateProgress(); continue;
+          stats.removed++; appendLog(`Dibuang (non-game): ${name}`); updateProgress(); continue;
         }
 
-        // ── Shader / GLSL ──
         if (lower.endsWith(".fsh") || lower.endsWith(".vsh") || lower.endsWith(".glsl")) {
           stats.shaderCount++;
           if (doShaderMinify) {
             const text = await entry.async("string");
             const minified = minifyShader(text);
-            outZip.file(name, minified);
-            if (minified.length < text.length) {
-              stats.shaderMinified++;
-              appendLog(`Shader minified: ${name} (${text.length}→${minified.length} chars)`);
-            } else {
-              outZip.file(name, text);
-            }
-          } else {
-            outZip.file(name, await entry.async("arraybuffer"));
-          }
+            outZip.file(name, minified.length < text.length ? minified : text);
+            if (minified.length < text.length) { stats.shaderMinified++; appendLog(`Shader minified: ${name}`); }
+          } else { outZip.file(name, await entry.async("arraybuffer")); }
           updateProgress(); continue;
         }
 
-        // ── .properties (OptiFine) ──
         if (lower.endsWith(".properties")) {
-          if (doShaderMinify) {
-            const text = await entry.async("string");
-            const minified = minifyProperties(text);
-            outZip.file(name, minified);
-          } else {
-            outZip.file(name, await entry.async("arraybuffer"));
-          }
+          if (doShaderMinify) { outZip.file(name, minifyProperties(await entry.async("string"))); }
+          else { outZip.file(name, await entry.async("arraybuffer")); }
           updateProgress(); continue;
         }
 
-        // ── pack.mcmeta ──
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
           const original = await entry.async("string");
-          let toWrite = original;
-          if (mcmetaLoaded && mcmetaText.trim().length > 0) {
-            toWrite = mcmetaText;
-            appendLog("Menggunakan pack.mcmeta hasil edit user.");
-          }
+          let toWrite = (mcmetaLoaded && mcmetaText.trim().length > 0) ? mcmetaText : original;
+          if (toWrite !== original) appendLog("Menggunakan pack.mcmeta hasil edit user.");
           try {
             let obj = JSON.parse(toWrite);
             if (doDeepCleanJson) obj = deepCleanJson(obj, lower);
@@ -747,92 +588,53 @@ export default function Home() {
             obj.pack._legal = "UU Hak Cipta No.28/2014 | Melanggar = pidana & denda";
             obj.pack._source = "github.com/KhaizenNomazen";
             if (typeof originalDesc === "string" && !originalDesc.includes("ghaa")) {
-              obj.pack.description = originalDesc
-                ? `${originalDesc} §7| §cOptimized by §aghaa`
-                : CREDIT_MCMETA_DESC;
+              obj.pack.description = originalDesc ? `${originalDesc} §7| §cOptimized by §aghaa` : CREDIT_MCMETA_DESC;
             }
             outZip.file(name, modeConfig.minifyJson ? JSON.stringify(obj) : JSON.stringify(obj, null, 2));
-            stats.jsonMinified++;
-            appendLog("pack.mcmeta: credit & watermark injected ✔");
-          } catch {
-            outZip.file(name, toWrite);
-            appendLog("pack.mcmeta bukan JSON valid, ditulis apa adanya.");
-          }
+            stats.jsonMinified++; appendLog("pack.mcmeta: credit injected ✔");
+          } catch { outZip.file(name, toWrite); appendLog("pack.mcmeta bukan JSON valid."); }
           updateProgress(); continue;
         }
 
-        // ── OGG ──
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
           if (optimizeOgg) {
             const { out, changed } = await optimizeOggSafe(buf);
-            if (changed) { stats.oggOptimized++; appendLog(`OGG safe optimized: ${name}`); }
+            if (changed) { stats.oggOptimized++; appendLog(`OGG optimized: ${name}`); }
             outZip.file(name, out);
-          } else {
-            outZip.file(name, buf);
-          }
+          } else { outZip.file(name, buf); }
           updateProgress(); continue;
         }
 
-        // ── PNG ──
         if (lower.endsWith(".png")) {
           stats.pngCount++;
           const policy = getPolicyForPath(lower, dynamicStripPaths);
           if (!preservePixelArt && policy.smoothing === "nearest") policy.smoothing = "smooth";
-
-          if (policy.skip) {
-            outZip.file(name, await entry.async("arraybuffer"));
-            updateProgress(); continue;
+          if (policy.skip || policy.skipResize) {
+            outZip.file(name, await entry.async("arraybuffer")); updateProgress(); continue;
           }
-          if (policy.skipResize) {
-            outZip.file(name, await entry.async("arraybuffer"));
-            updateProgress(); continue;
-          }
-
           const buf = await entry.async("arraybuffer");
           if (buf.byteLength < 2048) {
-            outZip.file(name, buf);
-            stats.pngSkippedByIHDR++;
-            updateProgress(); continue;
+            outZip.file(name, buf); stats.pngSkippedByIHDR++; updateProgress(); continue;
           }
-
           const sz = readPngIHDRSize(buf);
           if (!sz) { outZip.file(name, buf); updateProgress(); continue; }
-
           const { w: w0, h: h0 } = sz;
-
-          // [NEW] Oversized texture warning (Microsoft recommends max 256px non-entity untuk mobile)
-          if (w0 > 1024 || h0 > 1024) {
-            stats.oversizedWarnings++;
-            appendLog(`⚠️ Oversized: ${name} (${w0}x${h0}) — akan diresize`);
-          }
-
+          if (w0 > 1024 || h0 > 1024) { stats.oversizedWarnings++; appendLog(`⚠️ Oversized: ${name} (${w0}x${h0})`); }
           const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
-
-          const res = await pool.runPngJob({
-            buffer: buf, w0, h0, tW, tH, smoothing,
-            sizeGuard: true,
-            doAlphaClean,     // [NEW]
-            doSingleColor     // [NEW]
-          });
-
+          const res = await pool.runPngJob({ buffer: buf, w0, h0, tW, tH, smoothing, sizeGuard: true, doAlphaClean, doSingleColor });
           if (res?.singleColor) {
-            stats.pngSingleColor++;
-            stats.pngOptimized++;
-            appendLog(`PNG single-color → 1×1: ${name}`);
+            stats.pngSingleColor++; stats.pngOptimized++; appendLog(`PNG single-color→1×1: ${name}`);
           } else if (res?.changed) {
             stats.pngOptimized++;
             if (res.alphaFixed > 0) stats.pngAlphaCleaned++;
-            if (tW !== w0 || tH !== h0) appendLog(`PNG resized: ${name} (${w0}x${h0} → ${tW}x${tH})`);
-            else if (res.alphaFixed > 0) appendLog(`PNG alpha cleaned: ${name} (${res.alphaFixed} px)`);
+            if (tW !== w0 || tH !== h0) appendLog(`PNG resized: ${name} (${w0}x${h0}→${tW}x${tH})`);
+            else if (res.alphaFixed > 0) appendLog(`PNG alpha cleaned: ${name}`);
           }
-
-          outZip.file(name, res?.out || buf);
-          updateProgress(); continue;
+          outZip.file(name, res?.out || buf); updateProgress(); continue;
         }
 
-        // ── JSON (semua selain pack.mcmeta) ──
         if (lower.endsWith(".json") || lower.endsWith(".mcmeta")) {
           stats.jsonCount++;
           const text = await entry.async("string");
@@ -844,356 +646,381 @@ export default function Home() {
                 obj = deepCleanJson(obj, lower);
                 if (JSON.stringify(obj).length < before) stats.jsonDeepCleaned++;
               }
-              outZip.file(name, JSON.stringify(obj));
-              stats.jsonMinified++;
-            } catch {
-              outZip.file(name, text);
-            }
-          } else {
-            outZip.file(name, text);
-          }
+              outZip.file(name, JSON.stringify(obj)); stats.jsonMinified++;
+            } catch { outZip.file(name, text); }
+          } else { outZip.file(name, text); }
           updateProgress(); continue;
         }
 
-        // ── File lain (copy as-is) ──
-        outZip.file(name, await entry.async("arraybuffer"));
-        updateProgress();
+        outZip.file(name, await entry.async("arraybuffer")); updateProgress();
       }
 
-      // Inject credit files
       outZip.file("GHAIZERS_CREDIT.txt", CREDIT_TXT);
       outZip.file("JANGAN_BAYAR_INI.txt",
-        "⚠️  PERINGATAN PENTING!\n\n" +
-        "Jika kamu MEMBAYAR untuk mendapatkan tool ini atau pack yang dioptimasi ini,\n" +
-        "kamu sedang DITIPU!\n\n" +
+        "⚠️  PERINGATAN PENTING!\n\nJika kamu MEMBAYAR untuk mendapatkan tool ini, kamu sedang DITIPU!\n\n" +
         "Tool Ghaizers2.0 oleh ghaa (KhaizenNomazen) adalah GRATIS.\n" +
-        "Laporkan penjual tidak bertanggung jawab ke:\n" +
-        "github.com/KhaizenNomazen\n\n" +
-        "Menjual tool/output ini tanpa izin = MELANGGAR UU Hak Cipta No. 28 Tahun 2014\n" +
-        "Pelanggar dapat dipidana penjara & denda miliaran rupiah."
+        "Laporkan: github.com/KhaizenNomazen\n\n" +
+        "Menjual tool/output ini = MELANGGAR UU Hak Cipta No. 28 Tahun 2014"
       );
       appendLog("Credit files injected ✔");
 
       if (iconFile) {
-        appendLog("Menambahkan / override pack.png dari icon upload...");
+        appendLog("Override pack.png dari icon upload...");
         outZip.file("pack.png", await buildPackIcon(iconFile));
       }
 
-      appendLog("Menyusun ZIP hasil optimasi...");
+      appendLog("Menyusun ZIP...");
       const optimizedBlob = await outZip.generateAsync({
-        type: "blob",
-        compression: "DEFLATE",
+        type: "blob", compression: "DEFLATE",
         compressionOptions: { level: Math.max(1, Math.min(9, zipCompressionLevel)) },
-        comment: "Optimized by Ghaizers2.0 | (c) ghaa (KhaizenNomazen) | GRATIS - Dilarang Dijual! | github.com/KhaizenNomazen"
+        comment: "Optimized by Ghaizers2.0 | (c) ghaa (KhaizenNomazen) | GRATIS | github.com/KhaizenNomazen"
       });
 
       const sha1 = await sha1HexFromBlob(optimizedBlob);
-      if (sha1) appendLog(`SHA-1 hasil: ${sha1}`);
-
-      appendLog(" ");
+      if (sha1) appendLog(`SHA-1: ${sha1}`);
       CREDIT_BANNER.forEach(line => appendLog(line));
-      appendLog("Selesai ✔ Menyiapkan download...");
+      appendLog("Selesai ✔ Download dimulai...");
       triggerDownload(optimizedBlob, "optimize_file.zip");
 
       setSummary({
         ...stats, originalSize: file.size, optimizedSize: optimizedBlob.size,
-        sha1: sha1 || null, dynamicStripCount: dynamicStripPaths.length,
-        workers: computedWorkerCount, compressionLevel: zipCompressionLevel
+        sha1: sha1 || null, workers: computedWorkerCount, compressionLevel: zipCompressionLevel
       });
-
       flushLogs();
       setProgress({ done: totalToProcess, total: totalToProcess, etaSec: 0 });
     } catch (e) {
-      appendLog("ERROR: " + e.message);
-      flushLogs();
+      appendLog("ERROR: " + e.message); flushLogs();
     } finally {
-      pool.destroy();
-      setIsProcessing(false);
+      pool.destroy(); setIsProcessing(false);
     }
   };
 
   return (
-    <div className="page">
-      <div className="grid-pattern" />
-      <div className="background-orbit" />
-      <div className="background-orbit bg-2" />
-      <div className="background-gradient" />
+    <>
+      {/* ==================== SEO HEAD ==================== */}
+      <Head>
+        <title>Minecraft Resource Pack Optimizer Gratis – Ghaizers2.0</title>
+        <meta name="description" content="Optimize resource pack Minecraft kamu secara gratis dan otomatis. Kompres PNG, JSON, OGG tanpa kehilangan kualitas. Cocok untuk Pojav Launcher, HP low-end, dan Bedrock. 100% client-side, aman, cepat." />
+        <meta name="keywords" content="optimize resource pack minecraft, minecraft pack optimizer, kompres texture pack minecraft, pojav launcher resource pack ringan, minecraft pack optimizer gratis, optimize texture pack, ghaizers, resource pack compressor" />
 
-      <div className="watermark-topbar">
-        ⚠️ Tool ini 100% GRATIS oleh <strong>ghaa</strong> — Jika kamu membayar untuk ini, kamu DITIPU! &nbsp;|&nbsp;
-        <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
-      </div>
+        {/* Open Graph (WhatsApp, Facebook preview) */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://optimizer.ghaa.my.id" />
+        <meta property="og:title" content="Minecraft Resource Pack Optimizer Gratis – Ghaizers2.0" />
+        <meta property="og:description" content="Tool gratis untuk mengoptimasi resource pack Minecraft. Ringankan pack untuk Pojav, HP low-end, dan Bedrock. Dibuat oleh ghaa." />
+        <meta property="og:image" content="https://optimizer.ghaa.my.id/og-image.png" />
 
-      <main className="container">
-        <div className="glass-card">
-          <header className="header">
-            <div className="header-content">
-              <div className="header-left">
-                <h1>Minecraft Pack Optimizer</h1>
-                <p>Client-side processing • Chrome Android optimized • Web Workers • IHDR precheck • OGG Safe • Alpha Cleanup • Single-Color Detect • SHA-1</p>
-                <p className="header-credit">
-                  Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen) &nbsp;•&nbsp;
-                  Tool ini <span className="credit-free">GRATIS</span> selamanya &nbsp;•&nbsp;
-                  <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
-                </p>
-              </div>
-              <div className="header-right">
-                <span className="badge">v2.0</span>
-                <span className="badge-credit">by ghaa</span>
-              </div>
-            </div>
-          </header>
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Minecraft Resource Pack Optimizer Gratis – Ghaizers2.0" />
+        <meta name="twitter:description" content="Optimize resource pack Minecraft gratis. PNG, JSON, OGG. Cocok Pojav & low-end." />
 
-          <div className="legal-banner">
-            <div className="legal-banner-icon">⚠️</div>
-            <div className="legal-banner-text">
-              <strong>PERINGATAN HUKUM:</strong> Menjual tool ini atau output-nya tanpa izin tertulis dari ghaa adalah
-              pelanggaran <strong>UU Hak Cipta No. 28 Tahun 2014</strong>. Pelanggar dapat dikenakan pidana penjara
-              hingga 10 tahun dan denda hingga Rp 4.000.000.000.
-              Tool ini <strong>GRATIS</strong> — laporkan penjual ke{" "}
-              <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
-            </div>
-          </div>
+        {/* Canonical & robots */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://optimizer.ghaa.my.id" />
 
-          <div className="main-content">
-            {/* 1. Upload */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">1</div><h2>Upload Resource Pack</h2></div>
-              <p className="section-sub">Upload file <code>.zip</code> resource pack. Semua proses berjalan di browser.</p>
-              <input type="file" accept=".zip" id="inputFile" className="hidden-input" disabled={isProcessing} onChange={onMainFileChange} />
-              <label htmlFor="inputFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
-                <div className="upload-content">
-                  <div className="upload-icon">📦</div>
-                  <div className="upload-title">{fileName || "Klik untuk memilih file .zip"}</div>
-                  <div className="upload-sub">{fileName ? `${(file?.size / 1e6).toFixed(2)} MB` : "Proses 100% client-side"}</div>
+        {/* Structured Data (JSON-LD) — bantu Google ngerti ini WebApplication */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              "name": "Ghaizers2.0 – Minecraft Resource Pack Optimizer",
+              "url": "https://optimizer.ghaa.my.id",
+              "description": "Tool gratis untuk mengoptimasi resource pack Minecraft. Kompres PNG, JSON, OGG secara otomatis.",
+              "applicationCategory": "UtilitiesApplication",
+              "operatingSystem": "Any",
+              "offers": { "@type": "Offer", "price": "0", "priceCurrency": "IDR" },
+              "author": { "@type": "Person", "name": "ghaa (KhaizenNomazen)", "url": "https://github.com/KhaizenNomazen" }
+            })
+          }}
+        />
+      </Head>
+      {/* ==================== END SEO HEAD ==================== */}
+
+      <div className="page">
+        <div className="grid-pattern" />
+        <div className="background-orbit" />
+        <div className="background-orbit bg-2" />
+        <div className="background-gradient" />
+
+        <div className="watermark-topbar">
+          ⚠️ Tool ini 100% GRATIS oleh <strong>ghaa</strong> — Jika kamu membayar untuk ini, kamu DITIPU! &nbsp;|&nbsp;
+          <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
+        </div>
+
+        <main className="container">
+          <div className="glass-card">
+            <header className="header">
+              <div className="header-content">
+                <div className="header-left">
+                  <h1>Minecraft Pack Optimizer</h1>
+                  <p>Client-side • Web Workers • IHDR precheck • OGG Safe • Alpha Cleanup • Single-Color Detect • SHA-1</p>
+                  <p className="header-credit">
+                    Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen) &nbsp;•&nbsp;
+                    Tool ini <span className="credit-free">GRATIS</span> selamanya &nbsp;•&nbsp;
+                    <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
+                  </p>
                 </div>
-              </label>
-            </section>
-
-            {/* 2. Mode */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">2</div><h2>Pilih Mode Optimasi</h2></div>
-              <p className="section-sub">Setiap mode memiliki karakteristik optimasi berbeda sesuai kebutuhan device.</p>
-              <div className="mode-grid">
-                {Object.values(MODES).map(m => (
-                  <button key={m.id} className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
-                    disabled={isProcessing} onClick={() => setMode(m.id)}>
-                    <div className="mode-title-row"><span>{m.label}</span>{mode === m.id && <span className="mode-dot" />}</div>
-                    <p className="mode-desc">{m.description}</p>
-                    <ul className="mode-meta">
-                      <li>Scale: {Math.round(m.scale * 100)}%</li>
-                      <li>Max: {m.maxSize}px</li>
-                      <li>Minify: {m.minifyJson ? "Ya" : "Tidak"}</li>
-                    </ul>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* 3. Slider */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">3</div><h2>Fine-tune Resolusi</h2></div>
-              <p className="section-sub">Sesuaikan resolusi dari mode yang dipilih.</p>
-              <div className="slider-row">
-                <input type="range" min="40" max="120" value={resolutionPercent}
-                  onChange={e => setResolutionPercent(Number(e.target.value))}
-                  className="slider" disabled={isProcessing}
-                  style={{ "--value": `${((resolutionPercent - 40) / 80) * 100}%` }} />
-                <div className="slider-value">{resolutionPercent}%</div>
-              </div>
-              <div className="button-row">
-                {[40, 60, 80, 100, 120].map(v => (
-                  <button key={v} className="primary-button" onClick={() => setResolutionPercent(v)} disabled={isProcessing}>{v}%</button>
-                ))}
-              </div>
-            </section>
-
-            {/* 4. Opsi */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">4</div><h2>Opsi Optimasi</h2></div>
-              <div className="checkbox-wrapper">
-                <input type="checkbox" id="pixelArt" checked={preservePixelArt} onChange={e => setPreservePixelArt(e.target.checked)} disabled={isProcessing} />
-                <label htmlFor="pixelArt"><strong>Preserve Pixel Art</strong> — Jaga ketajaman GUI/font</label>
-              </div>
-              <div className="checkbox-wrapper">
-                <input type="checkbox" id="oggOpt" checked={optimizeOgg} onChange={e => setOptimizeOgg(e.target.checked)} disabled={isProcessing} />
-                <label htmlFor="oggOpt"><strong>Optimize Sound (.ogg)</strong> — Hapus metadata tanpa re-encode</label>
-              </div>
-              <div className="checkbox-wrapper">
-                <input type="checkbox" id="alphaClean" checked={doAlphaClean} onChange={e => setDoAlphaClean(e.target.checked)} disabled={isProcessing} />
-                <label htmlFor="alphaClean"><strong>Alpha Pixel Cleanup</strong> — Zero RGB transparan pixel → ZIP lebih kecil (aman, no visual loss)</label>
-              </div>
-              <div className="checkbox-wrapper">
-                <input type="checkbox" id="singleColor" checked={doSingleColor} onChange={e => setDoSingleColor(e.target.checked)} disabled={isProcessing} />
-                <label htmlFor="singleColor"><strong>Single-Color Detect</strong> — PNG solid 1 warna → resize ke 1×1 (teknik PackSquash)</label>
-              </div>
-              <div className="checkbox-wrapper">
-                <input type="checkbox" id="deepJson" checked={doDeepCleanJson} onChange={e => setDoDeepCleanJson(e.target.checked)} disabled={isProcessing} />
-                <label htmlFor="deepJson"><strong>Deep JSON Clean</strong> — Hapus field __comment, entry sounds kosong, dll</label>
-              </div>
-              <div className="checkbox-wrapper">
-                <input type="checkbox" id="shaderMin" checked={doShaderMinify} onChange={e => setDoShaderMinify(e.target.checked)} disabled={isProcessing} />
-                <label htmlFor="shaderMin"><strong>Shader/Properties Minify</strong> — Minify .fsh/.vsh/.glsl/.properties (OptiFine support)</label>
-              </div>
-            </section>
-
-            {/* 5. Advanced */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">5</div><h2>Pengaturan Lanjutan</h2></div>
-              <div style={{ marginBottom: 24 }}>
-                <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>ZIP Compression Level</h3>
-                <div className="slider-row">
-                  <input type="range" min="1" max="9" value={zipCompressionLevel}
-                    onChange={e => setZipCompressionLevel(Number(e.target.value))}
-                    className="slider" disabled={isProcessing}
-                    style={{ "--value": `${((zipCompressionLevel - 1) / 8) * 100}%` }} />
-                  <div className="slider-value">Level {zipCompressionLevel}</div>
+                <div className="header-right">
+                  <span className="badge">v2.0</span>
+                  <span className="badge-credit">by ghaa</span>
                 </div>
               </div>
-              <div>
-                <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>Web Workers</h3>
-                <div className="button-row">
-                  <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(0)}>Auto ({computedWorkerCount})</button>
-                  {[2, 3, 4].map(v => (
-                    <button key={v} className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(v)}>{v} Workers</button>
+            </header>
+
+            <div className="legal-banner">
+              <div className="legal-banner-icon">⚠️</div>
+              <div className="legal-banner-text">
+                <strong>PERINGATAN HUKUM:</strong> Menjual tool ini tanpa izin = pelanggaran <strong>UU Hak Cipta No. 28 Tahun 2014</strong>.
+                Pidana max 10 tahun &amp; denda max Rp 4 miliar. Tool ini <strong>GRATIS</strong> — laporkan penjual ke{" "}
+                <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
+              </div>
+            </div>
+
+            <div className="main-content">
+              {/* 1. Upload */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">1</div><h2>Upload Resource Pack</h2></div>
+                <p className="section-sub">Upload file <code>.zip</code> resource pack Minecraft. Semua proses berjalan di browser, tidak diupload ke server.</p>
+                <input type="file" accept=".zip" id="inputFile" className="hidden-input" disabled={isProcessing} onChange={onMainFileChange} />
+                <label htmlFor="inputFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
+                  <div className="upload-content">
+                    <div className="upload-icon">📦</div>
+                    <div className="upload-title">{fileName || "Klik untuk memilih file .zip"}</div>
+                    <div className="upload-sub">{fileName ? `${(file?.size / 1e6).toFixed(2)} MB` : "Proses 100% client-side"}</div>
+                  </div>
+                </label>
+              </section>
+
+              {/* 2. Mode */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">2</div><h2>Pilih Mode Optimasi</h2></div>
+                <p className="section-sub">Setiap mode memiliki karakteristik berbeda sesuai kebutuhan device kamu.</p>
+                <div className="mode-grid">
+                  {Object.values(MODES).map(m => (
+                    <button key={m.id} className={`mode-card ${m.id === mode ? "mode-active" : ""}`}
+                      disabled={isProcessing} onClick={() => setMode(m.id)}>
+                      <div className="mode-title-row"><span>{m.label}</span>{mode === m.id && <span className="mode-dot" />}</div>
+                      <p className="mode-desc">{m.description}</p>
+                      <ul className="mode-meta">
+                        <li>Scale: {Math.round(m.scale * 100)}%</li>
+                        <li>Max: {m.maxSize}px</li>
+                        <li>Minify: {m.minifyJson ? "Ya" : "Tidak"}</li>
+                      </ul>
+                    </button>
                   ))}
                 </div>
-              </div>
-            </section>
+              </section>
 
-            {/* 6. Icon */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">6</div><h2>Custom Pack Icon</h2></div>
-              <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile" className="hidden-input" disabled={isProcessing} onChange={onIconChange} />
-              <label htmlFor="iconFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
-                <div className="upload-content">
-                  <div className="upload-icon">🖼️</div>
-                  <div className="upload-title">{iconFile ? iconFile.name : "Klik untuk pilih gambar icon"}</div>
-                  <div className="upload-sub">PNG atau JPG • Auto-resize 128×128</div>
-                </div>
-              </label>
-            </section>
-
-            {/* 7. mcmeta */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">7</div><h2>pack.mcmeta Editor</h2></div>
-              <p className="section-sub">Edit konten pack.mcmeta. <strong>Credit ghaa akan otomatis diinjeksi.</strong></p>
-              {mcmetaError && <p className="section-sub" style={{ color: "#ef4444" }}>{mcmetaError}</p>}
-              {mcmetaLoaded ? (
-                <textarea className="mcmeta-textarea" rows={8} value={mcmetaText}
-                  onChange={e => setMcmetaText(e.target.value)} disabled={isProcessing}
-                  placeholder='{"pack": {"pack_format": 8, "description": "..."}}' />
-              ) : (
-                <p className="section-sub" style={{ fontStyle: "italic", marginTop: 12, opacity: 0.6 }}>
-                  pack.mcmeta tidak ditemukan atau belum di-load.
-                </p>
-              )}
-            </section>
-
-            {/* 8. Pojav Log */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">8</div><h2>Pojav Log Auto-Fix</h2></div>
-              <input type="file" accept=".txt" id="logFile" className="hidden-input" disabled={isProcessing} onChange={onLogFileChange} />
-              <label htmlFor="logFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
-                <div className="upload-content">
-                  <div className="upload-icon">📝</div>
-                  <div className="upload-title">Klik untuk pilih latestlog.txt</div>
-                  <div className="upload-sub">Terdeteksi: <strong>{dynamicStripPaths.length}</strong> path enforce-strip</div>
-                </div>
-              </label>
-            </section>
-
-            {/* 9. Progress */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">9</div><h2>Progress</h2></div>
-              <div className="progress-wrapper">
-                <div className="progress-bar-container">
-                  <div className="progress-bar">
-                    <div className="progress-bar-fill"
-                      style={{ width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%" }} />
-                  </div>
-                  <div className="progress-text">
-                    {progress.total ? `${progress.done}/${progress.total}` : "0/0"}
-                    {progress.etaSec != null && progress.etaSec > 0 ? ` • ETA ${progress.etaSec}s` : ""}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* 10. Optimize */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">10</div><h2>Optimize</h2></div>
-              <div className="button-row">
-                <button className="primary-button optimize-button" onClick={handleOptimize}
-                  disabled={isProcessing || !file}>
-                  {isProcessing ? "🔄 Sedang mengoptimasi..." : !file ? "📦 Upload pack dulu" : "✨ Optimize Sekarang"}
-                </button>
-              </div>
-            </section>
-
-            {/* 11. Console */}
-            <section className="section">
-              <div className="section-header"><div className="section-number">11</div><h2>Console Output</h2></div>
-              <div className="console" ref={logRef}>
-                {logs.length === 0 ? (
-                  <div className="console-placeholder">Belum ada log. Upload pack dan klik &quot;Optimize Sekarang&quot;.</div>
-                ) : (
-                  logs.map((l, i) => <div key={i} className="console-line">{l}</div>)
-                )}
-              </div>
-            </section>
-
-            {/* Summary */}
-            {summary && (
+              {/* 3. Slider */}
               <section className="section">
-                <div className="section-header"><div className="section-number">✓</div><h2>Hasil Optimasi</h2></div>
-                <div className="summary-grid">
-                  <Summary label="Ukuran File" value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`} />
-                  <Summary label="Penghematan" value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`} />
-                  <Summary label="PNG Optimized" value={`${summary.pngOptimized} / ${summary.pngCount}`} />
-                  <Summary label="PNG Skipped" value={summary.pngSkippedByIHDR} />
-                  {summary.pngSingleColor > 0 && <Summary label="PNG Single-Color→1×1" value={summary.pngSingleColor} />}
-                  {summary.pngAlphaCleaned > 0 && <Summary label="PNG Alpha Cleaned" value={summary.pngAlphaCleaned} />}
-                  {summary.oggCount > 0 && <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />}
-                  <Summary label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
-                  {summary.jsonDeepCleaned > 0 && <Summary label="JSON Deep Cleaned" value={summary.jsonDeepCleaned} />}
-                  {summary.shaderCount > 0 && <Summary label="Shader Minified" value={`${summary.shaderMinified} / ${summary.shaderCount}`} />}
-                  {summary.oversizedWarnings > 0 && <Summary label="⚠️ Oversized Textures" value={summary.oversizedWarnings} />}
-                  <Summary label="Files Removed" value={summary.removed} />
-                  <Summary label="Workers Used" value={summary.workers} />
-                  {summary.sha1 && (
-                    <Summary label="SHA-1 Hash" value={
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <span style={{ fontFamily: "monospace", fontSize: 11 }}>{summary.sha1.substring(0, 16)}...</span>
-                        <button className="primary-button" style={{ padding: "4px 12px", fontSize: 11 }}
-                          onClick={() => navigator.clipboard?.writeText(summary.sha1)}>Copy</button>
-                      </div>
-                    } />
+                <div className="section-header"><div className="section-number">3</div><h2>Fine-tune Resolusi</h2></div>
+                <p className="section-sub">Sesuaikan resolusi dari mode yang dipilih.</p>
+                <div className="slider-row">
+                  <input type="range" min="40" max="120" value={resolutionPercent}
+                    onChange={e => setResolutionPercent(Number(e.target.value))}
+                    className="slider" disabled={isProcessing}
+                    style={{ "--value": `${((resolutionPercent - 40) / 80) * 100}%` }} />
+                  <div className="slider-value">{resolutionPercent}%</div>
+                </div>
+                <div className="button-row">
+                  {[40, 60, 80, 100, 120].map(v => (
+                    <button key={v} className="primary-button" onClick={() => setResolutionPercent(v)} disabled={isProcessing}>{v}%</button>
+                  ))}
+                </div>
+              </section>
+
+              {/* 4. Opsi */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">4</div><h2>Opsi Optimasi</h2></div>
+                <div className="checkbox-wrapper">
+                  <input type="checkbox" id="pixelArt" checked={preservePixelArt} onChange={e => setPreservePixelArt(e.target.checked)} disabled={isProcessing} />
+                  <label htmlFor="pixelArt"><strong>Preserve Pixel Art</strong> — Jaga ketajaman GUI/font</label>
+                </div>
+                <div className="checkbox-wrapper">
+                  <input type="checkbox" id="oggOpt" checked={optimizeOgg} onChange={e => setOptimizeOgg(e.target.checked)} disabled={isProcessing} />
+                  <label htmlFor="oggOpt"><strong>Optimize Sound (.ogg)</strong> — Hapus metadata tanpa re-encode</label>
+                </div>
+                <div className="checkbox-wrapper">
+                  <input type="checkbox" id="alphaClean" checked={doAlphaClean} onChange={e => setDoAlphaClean(e.target.checked)} disabled={isProcessing} />
+                  <label htmlFor="alphaClean"><strong>Alpha Pixel Cleanup</strong> — Zero RGB pixel transparan → ZIP lebih kecil (no visual loss)</label>
+                </div>
+                <div className="checkbox-wrapper">
+                  <input type="checkbox" id="singleColor" checked={doSingleColor} onChange={e => setDoSingleColor(e.target.checked)} disabled={isProcessing} />
+                  <label htmlFor="singleColor"><strong>Single-Color Detect</strong> — PNG solid 1 warna → resize ke 1×1 (teknik PackSquash)</label>
+                </div>
+                <div className="checkbox-wrapper">
+                  <input type="checkbox" id="deepJson" checked={doDeepCleanJson} onChange={e => setDoDeepCleanJson(e.target.checked)} disabled={isProcessing} />
+                  <label htmlFor="deepJson"><strong>Deep JSON Clean</strong> — Hapus field __comment, entry sounds kosong, dll</label>
+                </div>
+                <div className="checkbox-wrapper">
+                  <input type="checkbox" id="shaderMin" checked={doShaderMinify} onChange={e => setDoShaderMinify(e.target.checked)} disabled={isProcessing} />
+                  <label htmlFor="shaderMin"><strong>Shader/Properties Minify</strong> — Minify .fsh/.vsh/.glsl/.properties (OptiFine)</label>
+                </div>
+              </section>
+
+              {/* 5. Advanced */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">5</div><h2>Pengaturan Lanjutan</h2></div>
+                <div style={{ marginBottom: 24 }}>
+                  <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>ZIP Compression Level</h3>
+                  <div className="slider-row">
+                    <input type="range" min="1" max="9" value={zipCompressionLevel}
+                      onChange={e => setZipCompressionLevel(Number(e.target.value))}
+                      className="slider" disabled={isProcessing}
+                      style={{ "--value": `${((zipCompressionLevel - 1) / 8) * 100}%` }} />
+                    <div className="slider-value">Level {zipCompressionLevel}</div>
+                  </div>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 16, marginBottom: 8, opacity: 0.9 }}>Web Workers</h3>
+                  <div className="button-row">
+                    <button className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(0)}>Auto ({computedWorkerCount})</button>
+                    {[2, 3, 4].map(v => (
+                      <button key={v} className="primary-button" disabled={isProcessing} onClick={() => setWorkerCount(v)}>{v} Workers</button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              {/* 6. Icon */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">6</div><h2>Custom Pack Icon</h2></div>
+                <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile" className="hidden-input" disabled={isProcessing} onChange={onIconChange} />
+                <label htmlFor="iconFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
+                  <div className="upload-content">
+                    <div className="upload-icon">🖼️</div>
+                    <div className="upload-title">{iconFile ? iconFile.name : "Klik untuk pilih gambar icon"}</div>
+                    <div className="upload-sub">PNG atau JPG • Auto-resize 128×128</div>
+                  </div>
+                </label>
+              </section>
+
+              {/* 7. mcmeta */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">7</div><h2>pack.mcmeta Editor</h2></div>
+                <p className="section-sub">Edit konten pack.mcmeta. <strong>Credit ghaa akan otomatis diinjeksi.</strong></p>
+                {mcmetaError && <p className="section-sub" style={{ color: "#ef4444" }}>{mcmetaError}</p>}
+                {mcmetaLoaded ? (
+                  <textarea className="mcmeta-textarea" rows={8} value={mcmetaText}
+                    onChange={e => setMcmetaText(e.target.value)} disabled={isProcessing}
+                    placeholder='{"pack": {"pack_format": 8, "description": "..."}}' />
+                ) : (
+                  <p className="section-sub" style={{ fontStyle: "italic", marginTop: 12, opacity: 0.6 }}>pack.mcmeta tidak ditemukan atau belum di-load.</p>
+                )}
+              </section>
+
+              {/* 8. Pojav Log */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">8</div><h2>Pojav Log Auto-Fix</h2></div>
+                <input type="file" accept=".txt" id="logFile" className="hidden-input" disabled={isProcessing} onChange={onLogFileChange} />
+                <label htmlFor="logFile" className={`upload-label ${isProcessing ? "disabled" : ""}`}>
+                  <div className="upload-content">
+                    <div className="upload-icon">📝</div>
+                    <div className="upload-title">Klik untuk pilih latestlog.txt</div>
+                    <div className="upload-sub">Terdeteksi: <strong>{dynamicStripPaths.length}</strong> path enforce-strip</div>
+                  </div>
+                </label>
+              </section>
+
+              {/* 9. Progress */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">9</div><h2>Progress</h2></div>
+                <div className="progress-wrapper">
+                  <div className="progress-bar-container">
+                    <div className="progress-bar">
+                      <div className="progress-bar-fill"
+                        style={{ width: progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : "0%" }} />
+                    </div>
+                    <div className="progress-text">
+                      {progress.total ? `${progress.done}/${progress.total}` : "0/0"}
+                      {progress.etaSec != null && progress.etaSec > 0 ? ` • ETA ${progress.etaSec}s` : ""}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 10. Optimize */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">10</div><h2>Optimize</h2></div>
+                <div className="button-row">
+                  <button className="primary-button optimize-button" onClick={handleOptimize} disabled={isProcessing || !file}>
+                    {isProcessing ? "🔄 Sedang mengoptimasi..." : !file ? "📦 Upload pack dulu" : "✨ Optimize Sekarang"}
+                  </button>
+                </div>
+              </section>
+
+              {/* 11. Console */}
+              <section className="section">
+                <div className="section-header"><div className="section-number">11</div><h2>Console Output</h2></div>
+                <div className="console" ref={logRef}>
+                  {logs.length === 0 ? (
+                    <div className="console-placeholder">Belum ada log. Upload pack dan klik &quot;Optimize Sekarang&quot;.</div>
+                  ) : (
+                    logs.map((l, i) => <div key={i} className="console-line">{l}</div>)
                   )}
                 </div>
-                <p className="section-sub" style={{ marginTop: 20, textAlign: "center" }}>
-                  ✅ <code>optimize_file.zip</code> sudah ter-download • Credit ghaa sudah diinjeksi ke dalam pack
-                </p>
               </section>
-            )}
-          </div>
 
-          <footer className="footer">
-            <div className="footer-credit-box">
-              <p className="footer-title">⚡ Ghaizers2.0 — Minecraft Pack Optimizer</p>
-              <p className="footer-author">Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen)</p>
-              <p className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</p>
-              <p className="footer-legal">⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun &amp; denda max Rp 4 miliar</p>
-              <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
-                🔗 github.com/KhaizenNomazen — Laporkan penyalahgunaan di sini
-              </a>
+              {/* Summary */}
+              {summary && (
+                <section className="section">
+                  <div className="section-header"><div className="section-number">✓</div><h2>Hasil Optimasi</h2></div>
+                  <div className="summary-grid">
+                    <Summary label="Ukuran File" value={`${(summary.originalSize / 1e6).toFixed(2)} MB → ${(summary.optimizedSize / 1e6).toFixed(2)} MB`} />
+                    <Summary label="Penghematan" value={`${(((summary.originalSize - summary.optimizedSize) / summary.originalSize) * 100).toFixed(1)}%`} />
+                    <Summary label="PNG Optimized" value={`${summary.pngOptimized} / ${summary.pngCount}`} />
+                    <Summary label="PNG Skipped" value={summary.pngSkippedByIHDR} />
+                    {summary.pngSingleColor > 0 && <Summary label="PNG Single-Color→1×1" value={summary.pngSingleColor} />}
+                    {summary.pngAlphaCleaned > 0 && <Summary label="PNG Alpha Cleaned" value={summary.pngAlphaCleaned} />}
+                    {summary.oggCount > 0 && <Summary label="Sound (.ogg)" value={`${summary.oggOptimized} / ${summary.oggCount}`} />}
+                    <Summary label="JSON Minified" value={`${summary.jsonMinified} / ${summary.jsonCount}`} />
+                    {summary.jsonDeepCleaned > 0 && <Summary label="JSON Deep Cleaned" value={summary.jsonDeepCleaned} />}
+                    {summary.shaderCount > 0 && <Summary label="Shader Minified" value={`${summary.shaderMinified} / ${summary.shaderCount}`} />}
+                    {summary.oversizedWarnings > 0 && <Summary label="⚠️ Oversized Textures" value={summary.oversizedWarnings} />}
+                    <Summary label="Files Removed" value={summary.removed} />
+                    <Summary label="Workers Used" value={summary.workers} />
+                    {summary.sha1 && (
+                      <Summary label="SHA-1 Hash" value={
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontFamily: "monospace", fontSize: 11 }}>{summary.sha1.substring(0, 16)}...</span>
+                          <button className="primary-button" style={{ padding: "4px 12px", fontSize: 11 }}
+                            onClick={() => navigator.clipboard?.writeText(summary.sha1)}>Copy</button>
+                        </div>
+                      } />
+                    )}
+                  </div>
+                  <p className="section-sub" style={{ marginTop: 20, textAlign: "center" }}>
+                    ✅ <code>optimize_file.zip</code> sudah ter-download • Credit ghaa sudah diinjeksi
+                  </p>
+                </section>
+              )}
             </div>
-            <p style={{ fontSize: 11, marginTop: 12, opacity: 0.4 }}>
-              IHDR Skip • Web Workers • OGG Safe • Alpha Cleanup • Single-Color Detect • Deep JSON Clean • Shader Minify • SHA-1 • Size Guard • ZIP Comment Watermark
-            </p>
-          </footer>
-        </div>
-      </main>
-    </div>
+
+            <footer className="footer">
+              <div className="footer-credit-box">
+                <p className="footer-title">⚡ Ghaizers2.0 — Minecraft Resource Pack Optimizer</p>
+                <p className="footer-author">Made with 💚 by <strong>ghaa</strong> (KhaizenNomazen)</p>
+                <p className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</p>
+                <p className="footer-legal">⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014 — Pidana max 10 tahun &amp; denda max Rp 4 miliar</p>
+                <a className="footer-link" href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
+                  🔗 github.com/KhaizenNomazen — Laporkan penyalahgunaan di sini
+                </a>
+              </div>
+              {/* SEO-friendly footer text */}
+              <p style={{ fontSize: 12, marginTop: 16, opacity: 0.5, textAlign: "center", lineHeight: 1.6 }}>
+                Tool optimize resource pack Minecraft gratis • Kompres texture pack • Ringankan pack untuk Pojav Launcher &amp; HP low-end<br />
+                Mendukung Minecraft Java &amp; Bedrock • PNG resize • OGG optimize • JSON minify • SHA-1 verify
+              </p>
+              <p style={{ fontSize: 11, marginTop: 8, opacity: 0.3 }}>
+                IHDR Skip • Web Workers • OGG Safe • Alpha Cleanup • Single-Color Detect • Deep JSON Clean • Shader Minify • SHA-1 • Size Guard
+              </p>
+            </footer>
+          </div>
+        </main>
+      </div>
+    </>
   );
 }
