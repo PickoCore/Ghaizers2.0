@@ -505,3 +505,117 @@ Tool ini GRATIS selamanya — untuk komunitas Minecraft Indonesia 🇮🇩
 [![Back to Top](https://img.shields.io/badge/⬆️_Back_to_Top-gray?style=flat-square)](#)
 
 </div>
+
+---
+
+## 🔄 Gimana Cara Kerjanya?
+
+Banyak yang nanya flow compress-nya kayak gimana, jadi gw jelasin di sini.
+
+Intinya ada **2 layer** yang terjadi:
+
+**Layer 1 — Kurangin ukuran file itu sendiri**
+Sebelum dizip, setiap file udah diproses dulu biar lebih kecil.
+
+**Layer 2 — DEFLATE ZIP compression**
+Karena kontennya udah ramping + entropy rendah, DEFLATE bisa kerja jauh lebih efektif.
+
+---
+
+### Urutan proses tiap file:
+
+```
+File masuk dari ZIP
+  │
+  ├─ System file? (.DS_Store, Thumbs.db, desktop.ini)
+  │    → langsung dibuang
+  │
+  ├─ Non-game file? (.psd, .bak, .md, dll)
+  │    → langsung dibuang
+  │
+  ├─ .fsh / .vsh / .glsl
+  │    → hapus komentar // dan /* */ + collapse whitespace
+  │
+  ├─ .properties
+  │    → hapus baris yang diawali #
+  │
+  ├─ .lang  (legacy MC 1.12.2)
+  │    → hapus baris komentar
+  │
+  ├─ .bbmodel  (Blockbench)
+  │    → hapus metadata: author, credit, date_modified, dll
+  │
+  ├─ .ogg
+  │    → strip ID3v2 header di awal file
+  │    → strip ID3v1 tag 128 byte di akhir file
+  │    → trim null padding
+  │    → TIDAK re-encode, kualitas audio 100% sama
+  │
+  ├─ .json / .mcmeta
+  │    → parse → deep clean (__comment, sounds array kosong)
+  │    → sort keys alphabetical (entropy turun, ZIP makin efektif)
+  │    → minify (hapus semua whitespace yang ga dibutuhin MC)
+  │
+  └─ .png
+       │
+       ├─ Baca IHDR header langsung (tanpa decode penuh)
+       ├─ Skip kalau < 2KB (ga worth diproses)
+       │
+       ├─ Single-color check
+       │    semua pixel warna sama? → resize ke 1×1 px
+       │    hemat sampai 98% untuk jenis texture ini
+       │
+       ├─ Resize berdasarkan mode yang dipilih
+       │    Normal   → 85% scale, max 512px
+       │    Extreme  → 60% scale, max 256px
+       │    Ultra    → 40% scale, max 128px
+       │
+       │    + policy per kategori folder:
+       │    textures/gui/    → scale 100%, min 16px, nearest
+       │    textures/font/   → skip resize sama sekali
+       │    textures/entity/ → scale 85%
+       │    textures/particle/→ scale 75%, nearest
+       │    modelengine/     → enforce animated strip fix
+       │
+       ├─ Power-of-two snap (opsional)
+       │    snap ukuran ke 16, 32, 64, 128... dst
+       │    GPU load lebih ringan
+       │
+       ├─ Alpha cleanup
+       │    pixel fully transparent (alpha=0) → zero RGB-nya
+       │    ga ada perubahan visual, tapi entropy PNG turun
+       │    ZIP jadi lebih efektif
+       │
+       └─ Size guard
+            kalau hasil resize ternyata lebih gede dari original
+            → pakai file asli aja
+```
+
+---
+
+### PNG diproses paralel (Web Workers)
+
+PNG adalah operasi paling berat. Kalau dikerjain di main thread, browser bakal freeze.
+
+Ghaizers bikin **worker pool** yang jumlahnya auto-detect dari `navigator.hardwareConcurrency`:
+
+```
+Main Thread
+    │
+    ├──▶ Worker 1 ──▶ OffscreenCanvas resize ──▶ hasil
+    ├──▶ Worker 2 ──▶ OffscreenCanvas resize ──▶ hasil
+    ├──▶ Worker 3 ──▶ OffscreenCanvas resize ──▶ hasil
+    └──▶ Worker 4 ──▶ OffscreenCanvas resize ──▶ hasil
+```
+
+Buffer dikirim sebagai **Transferable Objects** — zero copy, tidak ada duplikasi memori.
+
+---
+
+### Output
+
+Setelah semua file selesai:
+- 2 file credit diinjeksi (`GHAIZERS_CREDIT.txt`, `JANGAN_BAYAR_INI.txt`)
+- ZIP di-generate dengan DEFLATE level 1–9
+- SHA-1 hash dihitung untuk verifikasi integritas
+- File langsung ke-download otomatis sebagai `optimize_file.zip`
