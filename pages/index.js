@@ -569,7 +569,7 @@ export default function Home() {
         <meta property="og:description" content="Tool gratis optimize resource pack Minecraft. PNG, JSON, OGG. Cocok Pojav & low-end. Dibuat oleh ghaa." />
         <meta name="robots" content="index, follow" />
         <link rel="canonical" href="https://optimizer.ghaa.my.id" />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"WebApplication","name":"Ghaizers2.0","url":"https://optimizer.ghaa.my.id","description":"Tool gratis optimize resource pack Minecraft","applicationCategory":"UtilitiesApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"IDR"},"author":{"@type":"Person","name":"ghaa (KhaizenNomazen)","url":"https://github.com/KhaizenNomazen"}})}} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"WebApplication","name":"Ghaizers2.0","url":"https://optimizer.ghaa.my.id","description":"Tool gratis optimize resource pack Minecraft","applicationCategory":"UtilitiesApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"IDR"},"author":{"@type":"Person","name":"ghaa (KhaizenNomazen)","url":"https://github.com/PickoCore/Ghaizers2.0/tree/main"}})}} />
       </Head>
 
       {/* Background */}
@@ -586,7 +586,7 @@ export default function Home() {
         {/* Watermark */}
         <div className="watermark-bar">
           ⚠️ Tool ini 100% GRATIS oleh <strong>ghaa</strong> — Jika kamu membayar, kamu DITIPU! &nbsp;|&nbsp;
-          <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
+          <a href="https://github.com/PickoCore/Ghaizers2.0/tree/main" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
         </div>
 
         {/* Navbar */}
@@ -596,7 +596,7 @@ export default function Home() {
             GHAIZERS
           </div>
           <div className="navbar-links">
-            <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer" className="navbar-link">GitHub</a>
+            <a href="https://github.com/PickoCore/Ghaizers2.0/tree/main" target="_blank" rel="noopener noreferrer" className="navbar-link">GitHub</a>
             <span className="navbar-badge">v2.0</span>
           </div>
         </nav>
@@ -616,7 +616,7 @@ export default function Home() {
             <button className="hero-btn-primary" onClick={() => document.getElementById("optimizer-start")?.scrollIntoView({behavior:"smooth"})}>
               ✨ MULAI OPTIMIZE
             </button>
-            <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/PickoCore/Ghaizers2.0/tree/main" target="_blank" rel="noopener noreferrer">
               <button className="hero-btn-secondary">⭐ GitHub</button>
             </a>
           </div>
@@ -939,7 +939,7 @@ export default function Home() {
             ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014<br/>
             Pidana max 10 tahun · Denda max Rp 4.000.000.000
           </div>
-          <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer"
+          <a href="https://github.com/PickoCore/Ghaizers2.0/tree/main" target="_blank" rel="noopener noreferrer"
             style={{display:"block",color:"var(--green)",fontSize:12,marginBottom:16}}>
             🔗 github.com/KhaizenNomazen
           </a>
