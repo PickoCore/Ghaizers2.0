@@ -421,13 +421,13 @@ function classifyLog(msg) {
 /* ─────────────────────────────────────────
    COMPONENTS
 ───────────────────────────────────────── */
-function ProgressRing({pct,done,total,etaSec}){
+function ProgressRing({pct,done,total,etaSec,beating}){
   const r=44,circ=2*Math.PI*r,offset=circ-(pct/100)*circ;
   return (
     <div className="progress-ring-wrap">
       <svg className="progress-ring-svg" width="108" height="108" viewBox="0 0 108 108">
         <circle className="ring-track" cx="54" cy="54" r={r} strokeWidth="8"/>
-        <circle className={`ring-fill${isProcessing?" beating":""}`} cx="54" cy="54" r={r} strokeWidth="8"
+        <circle className={`ring-fill${beating?" beating":""}`} cx="54" cy="54" r={r} strokeWidth="8"
           strokeDasharray={circ} strokeDashoffset={offset}/>
       </svg>
       <div className="ring-info">
@@ -1303,7 +1303,7 @@ export default function Home() {
                 <div className="sec-num">10</div>
                 <div><div className="sec-title">Progress</div></div>
               </div>
-              <ProgressRing pct={progressPct} done={progress.done} total={progress.total} etaSec={progress.etaSec}/>
+              <ProgressRing pct={progressPct} done={progress.done} total={progress.total} etaSec={progress.etaSec} beating={isProcessing}/>
             </div>
 
             {/* 11. Console */}
