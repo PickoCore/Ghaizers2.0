@@ -410,11 +410,11 @@ async function analyzePackOnly(file, appendLog) {
 ───────────────────────────────────────── */
 function classifyLog(msg) {
   const m=msg.toLowerCase();
-  if(m.includes("error")||m.includes("gagal")||m.includes("invalid")) return "log-err";
-  if(m.includes("⚠️")||m.includes("warn")||m.includes("oversized")||m.includes("missing")) return "log-warn";
-  if(m.includes("selesai")||m.includes("✔")||m.includes("berhasil")||m.includes("download")||m.includes("✅")) return "log-ok";
-  if(m.includes("sha")||m.includes("eta")||m.includes("mode")||m.includes("scale")||m.includes("🔍")) return "log-info";
-  if(msg.startsWith("╔")||msg.startsWith("║")||msg.startsWith("╚")||msg.trim()==="") return "log-dim";
+  if(m.includes("error")||m.includes("gagal")||m.includes("invalid")) return "cl-err";
+  if(m.includes("⚠️")||m.includes("warn")||m.includes("oversized")||m.includes("missing")) return "cl-warn";
+  if(m.includes("selesai")||m.includes("✔")||m.includes("berhasil")||m.includes("download")||m.includes("✅")) return "cl-ok";
+  if(m.includes("sha")||m.includes("eta")||m.includes("mode")||m.includes("scale")||m.includes("🔍")) return "cl-info";
+  if(msg.startsWith("╔")||msg.startsWith("║")||msg.startsWith("╚")||msg.trim()==="") return "cl-dim";
   return "";
 }
 
@@ -426,14 +426,14 @@ function ProgressRing({pct,done,total,etaSec}){
   return (
     <div className="progress-ring-wrap">
       <svg className="progress-ring-svg" width="108" height="108" viewBox="0 0 108 108">
-        <circle className="progress-ring-bg" cx="54" cy="54" r={r} strokeWidth="8"/>
-        <circle className="progress-ring-fill" cx="54" cy="54" r={r} strokeWidth="8"
+        <circle className="ring-track" cx="54" cy="54" r={r} strokeWidth="8"/>
+        <circle className={`ring-fill${isProcessing?" beating":""}`} cx="54" cy="54" r={r} strokeWidth="8"
           strokeDasharray={circ} strokeDashoffset={offset}/>
       </svg>
-      <div className="progress-ring-info">
-        <span className="progress-ring-pct">{pct}%</span>
-        <div className="progress-ring-text">{total>0?`${done} / ${total} file`:"Menunggu file..."}</div>
-        {etaSec!=null&&etaSec>0&&<div className="progress-ring-eta">⏱ ETA {etaSec}s</div>}
+      <div className="ring-info">
+        <span className="ring-pct">{pct}%</span>
+        <div className="ring-detail">{total>0?`${done} / ${total} file`:"Menunggu file..."}</div>
+        {etaSec!=null&&etaSec>0&&<div className="ring-eta">⏱ ETA {etaSec}s</div>}
       </div>
     </div>
   );
@@ -442,7 +442,7 @@ function ProgressRing({pct,done,total,etaSec}){
 function CheckItem({checked,onChange,label,desc,disabled}){
   return (
     <div className={`check-item${checked?" checked":""}`} onClick={()=>!disabled&&onChange(!checked)}>
-      <div className="check-box">{checked&&<span className="check-box-tick">✓</span>}</div>
+      <div className="check-box">{checked&&<span className="check-tick">✓</span>}</div>
       <div><div className="check-label">{label}</div><div className="check-desc">{desc}</div></div>
     </div>
   );
@@ -450,9 +450,9 @@ function CheckItem({checked,onChange,label,desc,disabled}){
 
 function SummaryCard({label,value}){
   return (
-    <div className="summary-card">
-      <div className="summary-card-label">{label}</div>
-      <div className="summary-card-value">{value}</div>
+    <div className="sum-card">
+      <div className="sum-label">{label}</div>
+      <div className="sum-val">{value}</div>
     </div>
   );
 }
@@ -473,7 +473,7 @@ function AnalyzerResult({data}){
         {[["overview","📊 Overview"],["files","📁 Top Files"],["issues","⚠️ Issues"]].map(([id,label])=>(
           <button key={id} onClick={()=>setActiveTab(id)}
             style={{padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",
-              background:activeTab===id?"var(--green)":"var(--surface3)",
+              background:"var(--teal-dim)":"var(--s3)",
               color:activeTab===id?"#000":"var(--text-dim)",transition:"all 0.2s"}}>
             {label}
           </button>
@@ -585,14 +585,14 @@ function BadgeGenerator(){
         <div>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>Style</div>
           <select value={style} onChange={e=>setStyle(e.target.value)}
-            style={{background:"var(--surface3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"6px 10px",fontSize:12,fontFamily:"var(--font-body)"}}>
+            className="badge-select">
             {["flat","flat-square","for-the-badge","plastic","social"].map(s=><option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>Color (hex)</div>
           <input value={color} onChange={e=>setColor(e.target.value.replace("#",""))}
-            style={{background:"var(--surface3)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:6,padding:"6px 10px",fontSize:12,width:100,fontFamily:"var(--font-mono)"}}
+            className="badge-input"
             maxLength={6} placeholder="22c55e"/>
         </div>
       </div>
@@ -602,7 +602,7 @@ function BadgeGenerator(){
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <code style={{fontSize:10,flex:1,wordBreak:"break-all",color:"var(--text-dim)"}}>{url}</code>
             <button onClick={()=>navigator.clipboard?.writeText(`![Optimized with Ghaizers](${url})`)}
-              className="preset-btn" style={{fontSize:10,padding:"3px 10px",flexShrink:0}}>
+              className="pill" style={{fontSize:10,padding:"3px 10px",flexShrink:0}}>
               Copy MD
             </button>
           </div>
@@ -624,16 +624,16 @@ function ShareResults({summary}){
   return (
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:16}}>
       <a href={waUrl} target="_blank" rel="noopener noreferrer">
-        <button className="preset-btn" style={{background:"rgba(37,211,102,0.15)",borderColor:"rgba(37,211,102,0.4)",color:"#25d366"}}>
+        <button className="pill" style={{background:"rgba(37,211,102,0.15)",borderColor:"rgba(37,211,102,0.4)",color:"#25d366"}}>
           📱 Share WhatsApp
         </button>
       </a>
       <a href={twUrl} target="_blank" rel="noopener noreferrer">
-        <button className="preset-btn" style={{background:"rgba(29,161,242,0.15)",borderColor:"rgba(29,161,242,0.4)",color:"#1da1f2"}}>
+        <button className="pill" style={{background:"rgba(29,161,242,0.15)",borderColor:"rgba(29,161,242,0.4)",color:"#1da1f2"}}>
           🐦 Share Twitter/X
         </button>
       </a>
-      <button className="preset-btn" onClick={()=>navigator.clipboard?.writeText(text)}>
+      <button className="pill" onClick={()=>navigator.clipboard?.writeText(text)}>
         📋 Copy Teks
       </button>
     </div>
@@ -752,6 +752,7 @@ export default function Home() {
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
   const [iconFile, setIconFile] = useState(null);
+  const [iconBuffer, setIconBuffer] = useState(null); // fix: read immediately on select
   const [mcmetaText, setMcmetaText] = useState("");
   const [mcmetaLoaded, setMcmetaLoaded] = useState(false);
   const [mcmetaError, setMcmetaError] = useState("");
@@ -997,7 +998,7 @@ export default function Home() {
       outZip.file("GHAIZERS_CREDIT.txt",CREDIT_TXT);
       outZip.file("JANGAN_BAYAR_INI.txt","⚠️ Tool Ghaizers2.0 ini GRATIS!\nJika kamu membayar → kamu DITIPU!\nLapor: github.com/KhaizenNomazen\nMenjual = UU Hak Cipta No.28/2014");
       appendLog("Credit injected ✔");
-      if(iconFile){appendLog("Override pack.png...");outZip.file("pack.png",await buildPackIcon(iconFile));}
+      if(iconBuffer){appendLog("Override pack.png...");outZip.file("pack.png",iconBuffer);} else if(iconFile){appendLog("Override pack.png...");outZip.file("pack.png",await buildPackIcon(iconFile));}
       appendLog("Menyusun ZIP...");
       const blob=await outZip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:Math.max(1,Math.min(9,zipCompressionLevel))},comment:"Optimized by Ghaizers2.0 | (c) ghaa | GRATIS | github.com/KhaizenNomazen"});
       const sha1=await sha1HexFromBlob(blob);
@@ -1044,8 +1045,9 @@ export default function Home() {
 
         {/* Navbar */}
         <nav className="navbar">
-          <div className="navbar-logo" onClick={()=>setCurrentPage("home")} style={{cursor:"pointer"}}>
-            <div className="navbar-logo-dot"/>GHAIZERS
+          <div className="navbar-logo" onClick={()=>setCurrentPage("home")}>
+            <div className="navbar-logo-mark">G</div>
+            GHAIZERS
           </div>
           <div className="navbar-links">
             {[["home","🏠"],["docs","📚 Docs"],["faq","❓ FAQ"],["changelog","📋 Log"]].map(([page,label])=>(
@@ -1056,7 +1058,7 @@ export default function Home() {
               </button>
             ))}
             <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer" className="navbar-link">GitHub</a>
-            <span className="navbar-badge">v2.0</span>
+            <span className="navbar-version">v2.0</span>
           </div>
         </nav>
 
@@ -1081,27 +1083,27 @@ export default function Home() {
           {/* Hero */}
           <section className="hero">
             <div className="hero-eyebrow">⚡ MINECRAFT PACK OPTIMIZER</div>
-            <h1 className="hero-title">
+            <h1 className="hero-h1">
               Optimize <span className="accent">Resource Pack</span><br/>
               Minecraft Kamu <span className="gold">Gratis</span>
             </h1>
             <p className="hero-sub">Kompres PNG, minify JSON, optimize OGG — semua di browser kamu, tanpa upload ke server. Cocok untuk Pojav Launcher, HP low-end, dan Bedrock.</p>
-            <div className="hero-cta-row">
-              <button className="hero-btn-primary" onClick={()=>document.getElementById("optimizer-start")?.scrollIntoView({behavior:"smooth"})}>✨ MULAI OPTIMIZE</button>
-              <button className="hero-btn-secondary" onClick={()=>setCurrentPage("docs")}>📚 Dokumentasi</button>
+            <div className="hero-actions">
+              <button className="btn-primary" onClick={()=>document.getElementById("optimizer-start")?.scrollIntoView({behavior:"smooth"})}>✨ MULAI OPTIMIZE</button>
+              <button className="btn-secondary" onClick={()=>setCurrentPage("docs")}>📚 Dokumentasi</button>
             </div>
             <div className="hero-stats">
               {[["100%","Client-Side"],["0 MB","Upload ke Server"],["SHA-1","Verified"],["FREE","Selamanya"]].map(([v,l])=>(
                 <div className="hero-stat" key={l}>
-                  <span className="hero-stat-value">{v}</span>
-                  <span className="hero-stat-label">{l}</span>
+                  <span className="hero-stat-val">{v}</span>
+                  <span className="hero-stat-lbl">{l}</span>
                 </div>
               ))}
             </div>
           </section>
 
           {/* Feature Cards */}
-          <div className="features-strip">
+          <div className="feature-strip">
             {[
               ["🖼️","PNG Smart Resize","Scale + power-of-two enforcement"],
               ["✨","Alpha Cleanup","Zero RGB pixel transparan → ZIP kecil"],
@@ -1126,7 +1128,7 @@ export default function Home() {
             {/* 1. Upload */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">1</div>
+                <div className="sec-num">1</div>
                 <div><div className="sec-title">Upload Resource Pack</div><div className="sec-sub">Drag & drop atau klik untuk pilih file .zip</div></div>
               </div>
               <input type="file" accept=".zip" id="inputFile" className="hidden-input" disabled={isProcessing||isAnalyzing}
@@ -1134,21 +1136,21 @@ export default function Home() {
               <label htmlFor="inputFile"
                 className={`dropzone${isDragOver?" drag-over":""}${file?" has-file":""}`}
                 onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
-                <span className="dropzone-icon">{file?"📦":"⬆️"}</span>
-                {file?(<><div className="dropzone-file">{fileName}</div><div className="dropzone-size">{(file.size/1e6).toFixed(2)} MB · Klik untuk ganti</div></>)
-                     :(<><div className="dropzone-title">Drop file .zip di sini</div><div className="dropzone-sub">atau klik untuk browse · Proses 100% client-side</div></>)}
+                <span className="drop-icon">{file?"📦":"⬆️"}</span>
+                {file?(<><div className="drop-filename">{fileName}</div><div className="drop-filesize">{(file.size/1e6).toFixed(2)} MB · Klik untuk ganti</div></>)
+                     :(<><div className="drop-title">Drop file .zip di sini</div><div className="drop-sub">atau klik untuk browse · Proses 100% client-side</div></>)}
               </label>
             </div>
 
             {/* 2. Preset (Fase 2) */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">2</div>
+                <div className="sec-num">2</div>
                 <div><div className="sec-title">Quick Preset</div><div className="sec-sub">Terapkan konfigurasi siap pakai sesuai kebutuhan</div></div>
               </div>
-              <div className="preset-btns">
+              <div className="pill-row">
                 {Object.entries(DEFAULT_PRESETS).map(([key,p])=>(
-                  <button key={key} className="preset-btn" disabled={isProcessing||isAnalyzing} onClick={()=>applyPreset(key)}
+                  <button key={key} className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>applyPreset(key)}
                     style={{padding:"10px 16px",fontSize:12,fontWeight:600}}>
                     {p.label}
                   </button>
@@ -1159,19 +1161,19 @@ export default function Home() {
             {/* 3. Mode */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">3</div>
+                <div className="sec-num">3</div>
                 <div><div className="sec-title">Mode Optimasi</div><div className="sec-sub">Pilih sesuai target device</div></div>
               </div>
               <div className="mode-grid">
                 {Object.values(MODES).map(m=>(
                   <button key={m.id} className={`mode-card${mode===m.id?" active":""}`}
                     disabled={isProcessing||isAnalyzing} onClick={()=>setMode(m.id)}>
-                    <div className="mode-card-top">
-                      <span className="mode-name">{m.emoji} {m.label}</span>
-                      {mode===m.id&&<span className="mode-active-dot"/>}
+                    <div className="mode-card-head">
+                      <span className="mode-card-name">{m.emoji} {m.label}</span>
+                      {mode===m.id&&<span className="mode-card-dot"/>}
                     </div>
-                    <p className="mode-desc">{m.description}</p>
-                    <div className="mode-tags">
+                    <p className="mode-card-desc">{m.description}</p>
+                    <div className="mode-card-tags">
                       <span className="mode-tag">Scale {Math.round(m.scale*100)}%</span>
                       <span className="mode-tag">Max {m.maxSize}px</span>
                     </div>
@@ -1183,7 +1185,7 @@ export default function Home() {
             {/* 4. Fine-tune */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">4</div>
+                <div className="sec-num">4</div>
                 <div><div className="sec-title">Fine-tune Resolusi</div><div className="sec-sub">Kalikan scale mode × slider</div></div>
               </div>
               <div className="slider-row">
@@ -1191,11 +1193,11 @@ export default function Home() {
                   onChange={e=>setResolutionPercent(Number(e.target.value))}
                   className="slider" disabled={isProcessing||isAnalyzing}
                   style={{"--value":`${((resolutionPercent-40)/80)*100}%`}}/>
-                <div className="slider-value">{resolutionPercent}%</div>
+                <div className="slider-val">{resolutionPercent}%</div>
               </div>
-              <div className="preset-btns">
+              <div className="pill-row">
                 {[40,60,80,100,120].map(v=>(
-                  <button key={v} className="preset-btn" disabled={isProcessing||isAnalyzing} onClick={()=>setResolutionPercent(v)}>{v}%</button>
+                  <button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>setResolutionPercent(v)}>{v}%</button>
                 ))}
               </div>
             </div>
@@ -1203,7 +1205,7 @@ export default function Home() {
             {/* 5. Opsi */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">5</div>
+                <div className="sec-num">5</div>
                 <div><div className="sec-title">Opsi Optimasi</div><div className="sec-sub">Toggle fitur sesuai kebutuhan</div></div>
               </div>
               <div className="check-grid">
@@ -1222,7 +1224,7 @@ export default function Home() {
             {/* 6. Advanced */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">6</div>
+                <div className="sec-num">6</div>
                 <div><div className="sec-title">Pengaturan Lanjutan</div></div>
               </div>
               <div style={{marginBottom:24}}>
@@ -1232,14 +1234,14 @@ export default function Home() {
                     onChange={e=>setZipCompressionLevel(Number(e.target.value))}
                     className="slider" disabled={isProcessing||isAnalyzing}
                     style={{"--value":`${((zipCompressionLevel-1)/8)*100}%`}}/>
-                  <div className="slider-value">Lv{zipCompressionLevel}</div>
+                  <div className="slider-val">Lv{zipCompressionLevel}</div>
                 </div>
               </div>
               <div>
                 <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:"var(--text-dim)"}}>Web Workers</div>
-                <div className="preset-btns">
-                  <button className="preset-btn" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(0)}>Auto ({computedWorkerCount})</button>
-                  {[2,3,4].map(v=><button key={v} className="preset-btn" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(v)}>{v} Workers</button>)}
+                <div className="pill-row">
+                  <button className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(0)}>Auto ({computedWorkerCount})</button>
+                  {[2,3,4].map(v=><button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(v)}>{v} Workers</button>)}
                 </div>
               </div>
             </div>
@@ -1247,11 +1249,11 @@ export default function Home() {
             {/* 7. Icon */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">7</div>
+                <div className="sec-num">7</div>
                 <div><div className="sec-title">Custom Pack Icon</div><div className="sec-sub">Override pack.png · Auto-resize 128×128</div></div>
               </div>
               <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile" className="hidden-input" disabled={isProcessing||isAnalyzing}
-                onChange={e=>{const f=e.target.files?.[0];if(f){setIconFile(f);appendLog(`Icon: ${f.name}`);}}}/>
+                onChange={async e=>{const f=e.target.files?.[0];if(f){setIconFile(f);const ab=await f.arrayBuffer();setIconBuffer(ab);appendLog(`Icon: ${f.name}`);}}}/>
               <label htmlFor="iconFile" className={`upload-btn${iconFile?" has-file":""}`}>
                 <span className="upload-btn-icon">🖼️</span>
                 <div><div className="upload-btn-text">{iconFile?iconFile.name:"Klik untuk pilih gambar icon"}</div><div className="upload-btn-sub">PNG atau JPG</div></div>
@@ -1261,7 +1263,7 @@ export default function Home() {
             {/* 8. mcmeta */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">8</div>
+                <div className="sec-num">8</div>
                 <div><div className="sec-title">pack.mcmeta Editor</div><div className="sec-sub">Credit ghaa otomatis diinjeksi</div></div>
               </div>
               {mcmetaError&&<div style={{color:"var(--red)",fontSize:12,marginBottom:8}}>{mcmetaError}</div>}
@@ -1277,7 +1279,7 @@ export default function Home() {
             {/* 9. Pojav Log */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">9</div>
+                <div className="sec-num">9</div>
                 <div><div className="sec-title">Pojav Log Auto-Fix</div><div className="sec-sub">Parse latestlog.txt → fix animated strip otomatis</div></div>
               </div>
               <input type="file" accept=".txt" id="logFile" className="hidden-input" disabled={isProcessing||isAnalyzing}
@@ -1300,7 +1302,7 @@ export default function Home() {
             {/* 10. Progress */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">10</div>
+                <div className="sec-num">10</div>
                 <div><div className="sec-title">Progress</div></div>
               </div>
               <ProgressRing pct={progressPct} done={progress.done} total={progress.total} etaSec={progress.etaSec}/>
@@ -1309,28 +1311,28 @@ export default function Home() {
             {/* 11. Console */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number">11</div>
+                <div className="sec-num">11</div>
                 <div><div className="sec-title">Console Output</div></div>
               </div>
               <div className="console-wrap">
-                <div className="console-toolbar">
+                <div className="console-bar">
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div className="console-toolbar-dots">
-                      <div className="console-dot console-dot-r"/><div className="console-dot console-dot-y"/><div className="console-dot console-dot-g"/>
+                    <div className="console-dots">
+                      <div className="cdot cdot-r"/><div className="cdot cdot-y"/><div className="cdot cdot-g"/>
                     </div>
                     <div className="console-filters">
                       {["ALL","PNG","OGG","JSON","WARN"].map(f=>(
-                        <button key={f} className={`console-filter-btn${consoleFilter===f?" active":""}`} onClick={()=>setConsoleFilter(f)}>{f}</button>
+                        <button key={f} className={`cf-btn${consoleFilter===f?" on":""}`} onClick={()=>setConsoleFilter(f)}>{f}</button>
                       ))}
                     </div>
                   </div>
-                  <button className="console-copy-btn" onClick={()=>navigator.clipboard?.writeText(logs.join("\n"))}>Copy</button>
+                  <button className="console-copy" onClick={()=>navigator.clipboard?.writeText(logs.join("\n"))}>Copy</button>
                 </div>
                 <div className="console-body" ref={logRef}>
                   {filteredLogs.length===0?(
-                    <div className="console-placeholder">Belum ada log. Upload pack lalu klik Optimize atau Analyze.</div>
+                    <div className="console-empty">Belum ada log. Upload pack lalu klik Optimize atau Analyze.</div>
                   ):(
-                    filteredLogs.map((l,i)=><div key={i} className={`console-line ${classifyLog(l)}`}>{l}</div>)
+                    filteredLogs.map((l,i)=><div key={i} className={`cl ${classifyLog(l)}`}>{l}</div>)
                   )}
                 </div>
               </div>
@@ -1340,7 +1342,7 @@ export default function Home() {
             {analyzerResult&&(
               <div className="glass-section fade-in">
                 <div className="sec-header">
-                  <div className="sec-number" style={{background:"linear-gradient(135deg,#3b82f6,#1d4ed8)"}}>🔍</div>
+                  <div className="sec-num" style={{background:"rgba(96,165,250,0.15)",color:"var(--blue)"}}>🔍</div>
                   <div><div className="sec-title">Hasil Analisis</div><div className="sec-sub">Scan pack tanpa proses optimize</div></div>
                 </div>
                 <AnalyzerResult data={analyzerResult}/>
@@ -1351,12 +1353,12 @@ export default function Home() {
             {summary&&(
               <div className="glass-section fade-in">
                 <div className="sec-header">
-                  <div className="sec-number" style={{background:"linear-gradient(135deg,#f59e0b,#d97706)"}}>✓</div>
+                  <div className="sec-num" style={{background:"rgba(251,191,36,0.15)",color:"var(--amber)"}}>✓</div>
                   <div><div className="sec-title">Hasil Optimasi</div></div>
                 </div>
-                <div className="savings-big">
-                  <span className="savings-pct">{(((summary.originalSize-summary.optimizedSize)/summary.originalSize)*100).toFixed(1)}%</span>
-                  <div className="savings-label">ukuran berkurang</div>
+                <div className="savings-hero">
+                  <span className="savings-num">{(((summary.originalSize-summary.optimizedSize)/summary.originalSize)*100).toFixed(1)}%</span>
+                  <div className="savings-lbl">ukuran berkurang</div>
                   <div className="savings-sizes">{(summary.originalSize/1e6).toFixed(2)} MB → {(summary.optimizedSize/1e6).toFixed(2)} MB</div>
                 </div>
                 <div className="summary-grid">
@@ -1376,11 +1378,11 @@ export default function Home() {
                   <SummaryCard label="File Dihapus" value={summary.removed}/>
                   <SummaryCard label="Workers" value={summary.workers}/>
                   {summary.sha1&&(
-                    <div className="summary-card" style={{gridColumn:"1/-1"}}>
-                      <div className="summary-card-label">SHA-1 Hash</div>
+                    <div className="sum-card" style={{gridColumn:"1/-1"}}>
+                      <div className="sum-label">SHA-1 Hash</div>
                       <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"center",flexWrap:"wrap",marginTop:4}}>
                         <code style={{fontSize:11}}>{summary.sha1.substring(0,20)}...</code>
-                        <button className="preset-btn" style={{fontSize:11,padding:"3px 10px"}} onClick={()=>navigator.clipboard?.writeText(summary.sha1)}>Copy</button>
+                        <button className="pill" style={{fontSize:11,padding:"3px 10px"}} onClick={()=>navigator.clipboard?.writeText(summary.sha1)}>Copy</button>
                       </div>
                     </div>
                   )}
@@ -1396,7 +1398,7 @@ export default function Home() {
             {/* Fase 4: Badge Generator */}
             <div className="glass-section">
               <div className="sec-header">
-                <div className="sec-number" style={{background:"linear-gradient(135deg,#8b5cf6,#6d28d9)"}}>🏷️</div>
+                <div className="sec-num" style={{background:"linear-gradient(135deg,#8b5cf6,#6d28d9)"}}>🏷️</div>
                 <div><div className="sec-title">Badge Generator</div><div className="sec-sub">Tambahkan badge 'Optimized with Ghaizers' ke README pack kamu</div></div>
               </div>
               <BadgeGenerator/>
@@ -1405,20 +1407,20 @@ export default function Home() {
           </div>{/* /optimizer-wrap */}
 
           {/* Sticky button */}
-          <div className="optimize-btn-wrap">
-            <div style={{maxWidth:860,margin:"0 auto",display:"flex",gap:10}}>
+          <div className="sticky-btn-wrap">
+            <div className="sticky-btn-inner">
               <button
-                className="preset-btn"
+                className="pill"
                 onClick={handleAnalyze}
                 disabled={isProcessing||isAnalyzing||!file}
-                style={{padding:"16px 20px",fontSize:11,fontFamily:"var(--font-pixel)",fontWeight:700,flexShrink:0,
+                className="btn-analyze" style={{
                   background:isAnalyzing?"rgba(59,130,246,0.2)":"var(--surface3)",
                   borderColor:isAnalyzing?"var(--blue)":"var(--border)",
                   color:isAnalyzing?"var(--blue)":"var(--text-dim)"}}>
                 {isAnalyzing?"🔍...":"🔍"}
               </button>
               <button
-                className={`optimize-btn${isProcessing?" processing":""}`}
+                className={`btn-optimize${isProcessing?" processing":""}`}
                 style={{flex:1}}
                 onClick={handleOptimize}
                 disabled={isProcessing||isAnalyzing||!file}>
@@ -1442,7 +1444,7 @@ export default function Home() {
             </a>
             <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:16,flexWrap:"wrap"}}>
               {[["docs","📚 Docs"],["faq","❓ FAQ"],["changelog","📋 Changelog"]].map(([page,label])=>(
-                <button key={page} className="preset-btn" onClick={()=>setCurrentPage(page)} style={{fontSize:11}}>{label}</button>
+                <button key={page} className="pill" onClick={()=>setCurrentPage(page)} style={{fontSize:11}}>{label}</button>
               ))}
             </div>
             <div className="footer-tech">
