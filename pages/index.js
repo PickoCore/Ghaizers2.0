@@ -472,9 +472,7 @@ function AnalyzerResult({data}){
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
         {[["overview","📊 Overview"],["files","📁 Top Files"],["issues","⚠️ Issues"]].map(([id,label])=>(
           <button key={id} onClick={()=>setActiveTab(id)}
-            style={{padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",
-              background:"var(--teal-dim)":"var(--s3)",
-              color:activeTab===id?"#000":"var(--text-dim)",transition:"all 0.2s"}}>
+            className={`tab-btn${activeTab===id?" on":""}`}>
             {label}
           </button>
         ))}
