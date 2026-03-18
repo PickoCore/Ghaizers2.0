@@ -1,4 +1,5 @@
 import Head from "next/head";
+import { TRANSLATIONS, detectLanguage, t } from "../lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 
@@ -432,7 +433,7 @@ function ProgressRing({pct,done,total,etaSec,beating}){
       </svg>
       <div className="ring-info">
         <span className="ring-pct">{pct}%</span>
-        <div className="ring-detail">{total>0?`${done} / ${total} file`:"Menunggu file..."}</div>
+        <div className="ring-detail">{total>0?`${done} / ${total} file`:tr.progress_waiting}</div>
         {etaSec!=null&&etaSec>0&&<div className="ring-eta">⏱ ETA {etaSec}s</div>}
       </div>
     </div>
@@ -460,7 +461,7 @@ function SummaryCard({label,value}){
 /* ─────────────────────────────────────────
    ANALYZER RESULT COMPONENT (Fase 3)
 ───────────────────────────────────────── */
-function AnalyzerResult({data}){
+function AnalyzerResult({data,tr=TRANSLATIONS.id}){
   const [activeTab, setActiveTab] = useState("overview");
   if(!data) return null;
   const topFiles = [...data.fileList].sort((a,b)=>b.size-a.size).slice(0,10);
@@ -470,7 +471,7 @@ function AnalyzerResult({data}){
     <div style={{marginTop:20}}>
       {/* Tabs */}
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-        {[["overview","📊 Overview"],["files","📁 Top Files"],["issues","⚠️ Issues"]].map(([id,label])=>(
+        {[["overview",tr.tab_overview],["files",tr.tab_files],["issues",tr.tab_issues]].map(([id,label])=>(
           <button key={id} onClick={()=>setActiveTab(id)}
             className={`tab-btn${activeTab===id?" on":""}`}>
             {label}
@@ -481,8 +482,8 @@ function AnalyzerResult({data}){
       {activeTab==="overview"&&(
         <div>
           <div className="summary-grid" style={{marginBottom:16}}>
-            <SummaryCard label="Total File" value={data.totalFiles}/>
-            <SummaryCard label="Total Size" value={fmt(data.totalSize)}/>
+            <SummaryCard label={tr.analyzer_total} value={data.totalFiles}/>
+            <SummaryCard label={tr.analyzer_size} value={fmt(data.totalSize)}/>
             <SummaryCard label="PNG" value={`${data.pngCount} (${fmt(data.pngSize)})`}/>
             <SummaryCard label="JSON" value={`${data.jsonCount} (${fmt(data.jsonSize)})`}/>
             <SummaryCard label="OGG" value={`${data.oggCount} (${fmt(data.oggSize)})`}/>
@@ -558,7 +559,7 @@ function AnalyzerResult({data}){
             </div>
           )}
           {data.oversized.length===0&&data.invalidJson.length===0&&data.duplicates.length===0&&data.emptyFiles.length===0&&(
-            <div style={{textAlign:"center",padding:"24px",color:"var(--green)",fontSize:14}}>✅ Tidak ada masalah terdeteksi!</div>
+            <div style={{textAlign:"center",padding:"24px",color:"var(--green)",fontSize:14}}>{tr.analyzer_no_issues}</div>
           )}
         </div>
       )}
@@ -657,10 +658,10 @@ const CHANGELOG_DATA = [
   { version:"v1.x", date:"2024", changes:["Alpha pixel cleanup","Single-color detection → 1×1","Deep JSON clean","OGG safe strip","Shader/properties minify","Web Workers multi-thread","Pojav Log Auto-Fix","SHA-1 verification","SEO (sitemap, robots.txt, meta tags)"] },
 ];
 
-function DocsPage(){
+function DocsPage({tr=TRANSLATIONS.id}){
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
-      <h2 style={{fontFamily:"var(--font-pixel)",fontSize:14,color:"var(--green)",marginBottom:24}}>📚 DOKUMENTASI</h2>
+      <h2 className="page-h2">{tr.docs_title}</h2>
       {[
         {title:"🖼️ PNG Optimization",content:"Ghaizers menggunakan beberapa teknik untuk PNG:\n\n• Smart Resize: Scale texture berdasarkan mode yang dipilih, dengan kategori policy per folder (GUI, font, entity, particle)\n• Alpha Pixel Cleanup: Zero-out RGB pada pixel fully transparent (alpha=0). Tidak ada perubahan visual, tapi entropy PNG turun dan ZIP menjadi lebih kecil\n• Single-Color Detection: Deteksi PNG yang semua pixelnya identik warna → resize ke 1×1px\n• Power-of-Two: Snap ukuran ke dimensi 2^n terdekat (16,32,64...) untuk GPU efficiency\n• Size Guard: Jika hasil resize lebih besar dari original, file asli digunakan"},
         {title:"📄 JSON Optimization",content:"• JSON Minify: Hapus semua whitespace dan newline yang tidak diperlukan Minecraft\n• Deep Clean: Hapus field comment (__comment, _comment, //) yang dibuat Blockbench dan tool lain\n• Key Sorting: Sort keys alphabetically untuk better DEFLATE compression\n• Sounds.json: Hapus entry dengan array sounds kosong\n• .mcmeta: Edit langsung di interface, credit ghaa otomatis diinjeksi"},
@@ -677,11 +678,11 @@ function DocsPage(){
   );
 }
 
-function FaqPage(){
+function FaqPage({tr=TRANSLATIONS.id}){
   const [open, setOpen] = useState(null);
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
-      <h2 style={{fontFamily:"var(--font-pixel)",fontSize:14,color:"var(--green)",marginBottom:24}}>❓ FAQ</h2>
+      <h2 className="page-h2">{tr.faq_title}</h2>
       {FAQ_DATA.map((item,i)=>(
         <div key={i} style={{background:"var(--card)",border:`1px solid ${open===i?"var(--border-bright)":"var(--border)"}`,borderRadius:12,marginBottom:8,overflow:"hidden",transition:"border-color 0.2s"}}>
           <div onClick={()=>setOpen(open===i?null:i)}
@@ -700,10 +701,10 @@ function FaqPage(){
   );
 }
 
-function ChangelogPage(){
+function ChangelogPage({tr=TRANSLATIONS.id}){
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
-      <h2 style={{fontFamily:"var(--font-pixel)",fontSize:14,color:"var(--green)",marginBottom:24}}>📋 CHANGELOG</h2>
+      <h2 className="page-h2">{tr.changelog_title}</h2>
       {CHANGELOG_DATA.map((entry)=>(
         <div key={entry.version} style={{marginBottom:24}}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
@@ -730,6 +731,12 @@ function ChangelogPage(){
 export default function Home() {
   // page routing (Fase 4)
   const [currentPage, setCurrentPage] = useState("home");
+
+  // i18n
+  const [lang, setLang] = useState("id");
+  const tr = TRANSLATIONS[lang];
+  useEffect(() => { setLang(detectLanguage()); }, []);
+  const toggleLang = () => setLang(l => l === "id" ? "en" : "id");
 
   // optimizer settings
   const [mode, setMode] = useState("normal");
@@ -1016,8 +1023,8 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Minecraft Resource Pack Optimizer Gratis – Ghaizers2.0</title>
-        <meta name="description" content="Optimize resource pack Minecraft gratis. Kompres PNG, JSON, OGG tanpa kehilangan kualitas. Cocok Pojav, HP low-end, Bedrock. 100% client-side." />
+        <title>{lang==="en"?"Minecraft Resource Pack Optimizer Free – Ghaizers2.0":"Minecraft Resource Pack Optimizer Gratis – Ghaizers2.0"}</title>
+        <meta name="description" content={lang==="en"?"Optimize your Minecraft resource pack for free. Compress PNG, JSON, OGG without quality loss. Perfect for Pojav, low-end devices, Bedrock. 100% client-side.":"Optimize resource pack Minecraft gratis. Kompres PNG, JSON, OGG tanpa kehilangan kualitas. Cocok Pojav, HP low-end, Bedrock. 100% client-side."} />
         <meta name="keywords" content="optimize resource pack minecraft, minecraft pack optimizer, kompres texture pack, pojav launcher resource pack ringan, ghaizers" />
         <meta property="og:type" content="website"/>
         <meta property="og:url" content="https://optimizer.ghaa.my.id"/>
@@ -1037,7 +1044,7 @@ export default function Home() {
       <div className="page-root">
         {/* Watermark */}
         <div className="watermark-bar">
-          ⚠️ Tool ini 100% GRATIS oleh <strong>ghaa</strong> — Jika kamu membayar, kamu DITIPU! &nbsp;|&nbsp;
+          {tr.watermark} &nbsp;|&nbsp;
           <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
         </div>
 
@@ -1056,23 +1063,31 @@ export default function Home() {
               </button>
             ))}
             <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer" className="navbar-link">GitHub</a>
+            <button onClick={toggleLang}
+              style={{padding:"5px 12px",borderRadius:20,border:"1px solid rgba(45,212,191,0.25)",
+                background:"rgba(45,212,191,0.08)",color:"var(--teal)",fontSize:12,
+                fontWeight:700,cursor:"pointer",fontFamily:"var(--f-mono)",
+                letterSpacing:"0.5px",transition:"all 0.2s",marginRight:4}}
+              title={lang==="id"?"Switch to English":"Ganti ke Indonesia"}>
+              {lang==="id"?"🇮🇩 ID":"🇬🇧 EN"}
+            </button>
             <span className="navbar-version">v2.0</span>
           </div>
         </nav>
 
         {/* ── DOCS PAGE ── */}
         {currentPage==="docs"&&(
-          <div className="optimizer-wrap"><DocsPage/></div>
+          <div className="optimizer-wrap"><DocsPage tr={tr}/></div>
         )}
 
         {/* ── FAQ PAGE ── */}
         {currentPage==="faq"&&(
-          <div className="optimizer-wrap"><FaqPage/></div>
+          <div className="optimizer-wrap"><FaqPage tr={tr}/></div>
         )}
 
         {/* ── CHANGELOG PAGE ── */}
         {currentPage==="changelog"&&(
-          <div className="optimizer-wrap"><ChangelogPage/></div>
+          <div className="optimizer-wrap"><ChangelogPage tr={tr}/></div>
         )}
 
         {/* ── HOME PAGE ── */}
@@ -1080,18 +1095,18 @@ export default function Home() {
 
           {/* Hero */}
           <section className="hero">
-            <div className="hero-eyebrow">⚡ MINECRAFT PACK OPTIMIZER</div>
+            <div className="hero-eyebrow">{tr.hero_eyebrow}</div>
             <h1 className="hero-h1">
-              Optimize <span className="accent">Resource Pack</span><br/>
-              Minecraft Kamu <span className="gold">Gratis</span>
+              {tr.hero_title_1} <span className="accent">{tr.hero_title_accent}</span><br/>
+              {tr.hero_title_2} <span className="gold">{tr.hero_title_gold}</span>
             </h1>
-            <p className="hero-sub">Kompres PNG, minify JSON, optimize OGG — semua di browser kamu, tanpa upload ke server. Cocok untuk Pojav Launcher, HP low-end, dan Bedrock.</p>
+            <p className="hero-sub">{tr.hero_sub}</p>
             <div className="hero-actions">
-              <button className="btn-primary" onClick={()=>document.getElementById("optimizer-start")?.scrollIntoView({behavior:"smooth"})}>✨ MULAI OPTIMIZE</button>
-              <button className="btn-secondary" onClick={()=>setCurrentPage("docs")}>📚 Dokumentasi</button>
+              <button className="btn-primary" onClick={()=>document.getElementById("optimizer-start")?.scrollIntoView({behavior:"smooth"})}>{tr.hero_cta}</button>
+              <button className="btn-secondary" onClick={()=>setCurrentPage("docs")}>{tr.hero_docs}</button>
             </div>
             <div className="hero-stats">
-              {[["100%","Client-Side"],["0 MB","Upload ke Server"],["SHA-1","Verified"],["FREE","Selamanya"]].map(([v,l])=>(
+              {[["100%",tr.hero_stat_1],["0 MB",tr.hero_stat_2],["SHA-1",tr.hero_stat_3],["FREE",tr.hero_stat_4]].map(([v,l])=>(
                 <div className="hero-stat" key={l}>
                   <span className="hero-stat-val">{v}</span>
                   <span className="hero-stat-lbl">{l}</span>
@@ -1103,14 +1118,14 @@ export default function Home() {
           {/* Feature Cards */}
           <div className="feature-strip">
             {[
-              ["🖼️","PNG Smart Resize","Scale + power-of-two enforcement"],
-              ["✨","Alpha Cleanup","Zero RGB pixel transparan → ZIP kecil"],
-              ["🎨","Single-Color Detect","PNG solid → 1×1 px (PackSquash)"],
-              ["📄","Deep JSON Clean","Comment fields, sounds kosong, key sort"],
-              ["🔊","OGG Safe Strip","Hapus ID3 metadata tanpa re-encode"],
-              ["⚡","Web Workers","Multi-thread, browser tidak freeze"],
-              ["🔍","Pack Analyzer","Scan & analisis tanpa optimize"],
-              ["🏷️","Badge Generator","Badge 'Optimized with Ghaizers'"],
+              ["🖼️",tr.feat_1_title,tr.feat_1_desc],
+              ["✨",tr.feat_2_title,tr.feat_2_desc],
+              ["🎨",tr.feat_3_title,tr.feat_3_desc],
+              ["📄",tr.feat_4_title,tr.feat_4_desc],
+              ["🔊",tr.feat_5_title,tr.feat_5_desc],
+              ["⚡",tr.feat_6_title,tr.feat_6_desc],
+              ["🔍",tr.feat_7_title,tr.feat_7_desc],
+              ["🏷️",tr.feat_8_title,tr.feat_8_desc],
             ].map(([icon,title,desc])=>(
               <div className="feature-card" key={title}>
                 <span className="feature-card-icon">{icon}</span>
@@ -1127,7 +1142,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">1</div>
-                <div><div className="sec-title">Upload Resource Pack</div><div className="sec-sub">Drag & drop atau klik untuk pilih file .zip</div></div>
+                <div><div className="sec-title">{tr.sec_upload_title}</div><div className="sec-sub">{tr.sec_upload_sub}</div></div>
               </div>
               <input type="file" accept=".zip" id="inputFile" className="hidden-input" disabled={isProcessing||isAnalyzing}
                 onChange={e=>handleFile(e.target.files?.[0])}/>
@@ -1136,7 +1151,7 @@ export default function Home() {
                 onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
                 <span className="drop-icon">{file?"📦":"⬆️"}</span>
                 {file?(<><div className="drop-filename">{fileName}</div><div className="drop-filesize">{(file.size/1e6).toFixed(2)} MB · Klik untuk ganti</div></>)
-                     :(<><div className="drop-title">Drop file .zip di sini</div><div className="drop-sub">atau klik untuk browse · Proses 100% client-side</div></>)}
+                     :(<><div className="drop-title">{tr.sec_upload_drop_title}</div><div className="drop-sub">{tr.sec_upload_drop_sub}</div></>)}
               </label>
             </div>
 
@@ -1144,7 +1159,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">2</div>
-                <div><div className="sec-title">Quick Preset</div><div className="sec-sub">Terapkan konfigurasi siap pakai sesuai kebutuhan</div></div>
+                <div><div className="sec-title">{tr.sec_preset_title}</div><div className="sec-sub">{tr.sec_preset_sub}</div></div>
               </div>
               <div className="pill-row">
                 {Object.entries(DEFAULT_PRESETS).map(([key,p])=>(
@@ -1160,7 +1175,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">3</div>
-                <div><div className="sec-title">Mode Optimasi</div><div className="sec-sub">Pilih sesuai target device</div></div>
+                <div><div className="sec-title">{tr.sec_mode_title}</div><div className="sec-sub">{tr.sec_mode_sub}</div></div>
               </div>
               <div className="mode-grid">
                 {Object.values(MODES).map(m=>(
@@ -1170,7 +1185,7 @@ export default function Home() {
                       <span className="mode-card-name">{m.emoji} {m.label}</span>
                       {mode===m.id&&<span className="mode-card-dot"/>}
                     </div>
-                    <p className="mode-card-desc">{m.description}</p>
+                    <p className="mode-card-desc">{m.id==="normal"?tr.mode_normal_desc:m.id==="extreme"?tr.mode_extreme_desc:tr.mode_ultra_desc}</p>
                     <div className="mode-card-tags">
                       <span className="mode-tag">Scale {Math.round(m.scale*100)}%</span>
                       <span className="mode-tag">Max {m.maxSize}px</span>
@@ -1184,7 +1199,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">4</div>
-                <div><div className="sec-title">Fine-tune Resolusi</div><div className="sec-sub">Kalikan scale mode × slider</div></div>
+                <div><div className="sec-title">{tr.sec_resolution_title}</div><div className="sec-sub">{tr.sec_resolution_sub}</div></div>
               </div>
               <div className="slider-row">
                 <input type="range" min="40" max="120" value={resolutionPercent}
@@ -1204,18 +1219,18 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">5</div>
-                <div><div className="sec-title">Opsi Optimasi</div><div className="sec-sub">Toggle fitur sesuai kebutuhan</div></div>
+                <div><div className="sec-title">{tr.sec_options_title}</div><div className="sec-sub">{tr.sec_options_sub}</div></div>
               </div>
               <div className="check-grid">
-                <CheckItem checked={preservePixelArt} onChange={setPreservePixelArt} disabled={isProcessing||isAnalyzing} label="Preserve Pixel Art" desc="Jaga ketajaman GUI & font (nearest-neighbor)"/>
-                <CheckItem checked={optimizeOgg} onChange={setOptimizeOgg} disabled={isProcessing||isAnalyzing} label="Optimize OGG Sound" desc="Strip metadata ID3 tanpa re-encode audio"/>
-                <CheckItem checked={doAlphaClean} onChange={setDoAlphaClean} disabled={isProcessing||isAnalyzing} label="Alpha Pixel Cleanup" desc="Zero RGB transparan pixel → ZIP lebih kecil"/>
-                <CheckItem checked={doSingleColor} onChange={setDoSingleColor} disabled={isProcessing||isAnalyzing} label="Single-Color Detect" desc="PNG solid satu warna → resize ke 1×1"/>
-                <CheckItem checked={doDeepCleanJson} onChange={setDoDeepCleanJson} disabled={isProcessing||isAnalyzing} label="Deep JSON Clean" desc="Hapus __comment, sounds kosong, dll"/>
-                <CheckItem checked={doShaderMinify} onChange={setDoShaderMinify} disabled={isProcessing||isAnalyzing} label="Shader Minify" desc="Minify .fsh/.vsh/.glsl/.properties OptiFine"/>
-                <CheckItem checked={doPowerOfTwo} onChange={setDoPowerOfTwo} disabled={isProcessing||isAnalyzing} label="Power-of-Two (Fase 2)" desc="Snap ukuran PNG ke 2^n terdekat (16,32,64...)"/>
-                <CheckItem checked={doJsonKeySort} onChange={setDoJsonKeySort} disabled={isProcessing||isAnalyzing} label="JSON Key Sorting (Fase 2)" desc="Sort keys alphabetically → better compression"/>
-                <CheckItem checked={doLangMinify} onChange={setDoLangMinify} disabled={isProcessing||isAnalyzing} label=".lang Minify (Fase 2)" desc="Minify legacy language files MC 1.12.2"/>
+                <CheckItem checked={preservePixelArt} onChange={setPreservePixelArt} disabled={isProcessing||isAnalyzing} label={tr.opt_pixelart} desc={tr.opt_pixelart_desc}/>
+                <CheckItem checked={optimizeOgg} onChange={setOptimizeOgg} disabled={isProcessing||isAnalyzing} label={tr.opt_ogg} desc={tr.opt_ogg_desc}/>
+                <CheckItem checked={doAlphaClean} onChange={setDoAlphaClean} disabled={isProcessing||isAnalyzing} label={tr.opt_alpha} desc={tr.opt_alpha_desc}/>
+                <CheckItem checked={doSingleColor} onChange={setDoSingleColor} disabled={isProcessing||isAnalyzing} label={tr.opt_singlecolor} desc={tr.opt_singlecolor_desc}/>
+                <CheckItem checked={doDeepCleanJson} onChange={setDoDeepCleanJson} disabled={isProcessing||isAnalyzing} label={tr.opt_deepjson} desc={tr.opt_deepjson_desc}/>
+                <CheckItem checked={doShaderMinify} onChange={setDoShaderMinify} disabled={isProcessing||isAnalyzing} label={tr.opt_shader} desc={tr.opt_shader_desc}/>
+                <CheckItem checked={doPowerOfTwo} onChange={setDoPowerOfTwo} disabled={isProcessing||isAnalyzing} label={tr.opt_pow2} desc={tr.opt_pow2_desc}/>
+                <CheckItem checked={doJsonKeySort} onChange={setDoJsonKeySort} disabled={isProcessing||isAnalyzing} label={tr.opt_jsonsort} desc={tr.opt_jsonsort_desc}/>
+                <CheckItem checked={doLangMinify} onChange={setDoLangMinify} disabled={isProcessing||isAnalyzing} label={tr.opt_lang} desc={tr.opt_lang_desc}/>
               </div>
             </div>
 
@@ -1223,10 +1238,10 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">6</div>
-                <div><div className="sec-title">Pengaturan Lanjutan</div></div>
+                <div><div className="sec-title">{tr.sec_advanced_title}</div></div>
               </div>
               <div style={{marginBottom:24}}>
-                <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:"var(--text-dim)"}}>ZIP Compression Level</div>
+                <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:"var(--t2)"}}>{tr.zip_level}</div>
                 <div className="slider-row">
                   <input type="range" min="1" max="9" value={zipCompressionLevel}
                     onChange={e=>setZipCompressionLevel(Number(e.target.value))}
@@ -1238,7 +1253,7 @@ export default function Home() {
               <div>
                 <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:"var(--text-dim)"}}>Web Workers</div>
                 <div className="pill-row">
-                  <button className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(0)}>Auto ({computedWorkerCount})</button>
+                  <button className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(0)}>{tr.workers_auto} ({computedWorkerCount})</button>
                   {[2,3,4].map(v=><button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={()=>setWorkerCount(v)}>{v} Workers</button>)}
                 </div>
               </div>
@@ -1248,13 +1263,13 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">7</div>
-                <div><div className="sec-title">Custom Pack Icon</div><div className="sec-sub">Override pack.png · Auto-resize 128×128</div></div>
+                <div><div className="sec-title">{tr.sec_icon_title}</div><div className="sec-sub">{tr.sec_icon_sub}</div></div>
               </div>
               <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile" className="hidden-input" disabled={isProcessing||isAnalyzing}
                 onChange={async e=>{const f=e.target.files?.[0];if(f){setIconFile(f);const ab=await f.arrayBuffer();setIconBuffer(ab);appendLog(`Icon: ${f.name}`);}}}/>
               <label htmlFor="iconFile" className={`upload-btn${iconFile?" has-file":""}`}>
                 <span className="upload-btn-icon">🖼️</span>
-                <div><div className="upload-btn-text">{iconFile?iconFile.name:"Klik untuk pilih gambar icon"}</div><div className="upload-btn-sub">PNG atau JPG</div></div>
+                <div><div className="upload-btn-text">{iconFile?iconFile.name:tr.icon_placeholder}</div><div className="upload-btn-sub">{tr.icon_sub}</div></div>
               </label>
             </div>
 
@@ -1262,7 +1277,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">8</div>
-                <div><div className="sec-title">pack.mcmeta Editor</div><div className="sec-sub">Credit ghaa otomatis diinjeksi</div></div>
+                <div><div className="sec-title">{tr.sec_mcmeta_title}</div><div className="sec-sub">{tr.sec_mcmeta_sub}</div></div>
               </div>
               {mcmetaError&&<div style={{color:"var(--red)",fontSize:12,marginBottom:8}}>{mcmetaError}</div>}
               {mcmetaLoaded?(
@@ -1270,7 +1285,7 @@ export default function Home() {
                   onChange={e=>setMcmetaText(e.target.value)} disabled={isProcessing||isAnalyzing}
                   placeholder='{"pack": {"pack_format": 8, "description": "..."}}' />
               ):(
-                <div style={{color:"var(--text-muted)",fontSize:12,fontStyle:"italic",padding:"16px 0"}}>pack.mcmeta tidak ditemukan atau belum di-load.</div>
+                <div style={{color:"var(--t3)",fontSize:12,fontStyle:"italic",padding:"16px 0"}}>{tr.mcmeta_empty}</div>
               )}
             </div>
 
@@ -1278,7 +1293,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">9</div>
-                <div><div className="sec-title">Pojav Log Auto-Fix</div><div className="sec-sub">Parse latestlog.txt → fix animated strip otomatis</div></div>
+                <div><div className="sec-title">{tr.sec_pojav_title}</div><div className="sec-sub">{tr.sec_pojav_sub}</div></div>
               </div>
               <input type="file" accept=".txt" id="logFile" className="hidden-input" disabled={isProcessing||isAnalyzing}
                 onChange={async e=>{
@@ -1291,8 +1306,8 @@ export default function Home() {
               <label htmlFor="logFile" className="upload-btn">
                 <span className="upload-btn-icon">📝</span>
                 <div>
-                  <div className="upload-btn-text">Klik untuk pilih latestlog.txt</div>
-                  <div className="upload-btn-sub">Terdeteksi: <strong style={{color:"var(--green)"}}>{dynamicStripPaths.length}</strong> path enforce-strip</div>
+                  <div className="upload-btn-text">{tr.pojav_placeholder}</div>
+                  <div className="upload-btn-sub">Detected: <strong style={{color:"var(--green)"}}>{dynamicStripPaths.length}</strong> {tr.pojav_detected}</div>
                 </div>
               </label>
             </div>
@@ -1301,7 +1316,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">10</div>
-                <div><div className="sec-title">Progress</div></div>
+                <div><div className="sec-title">{tr.sec_progress_title}</div></div>
               </div>
               <ProgressRing pct={progressPct} done={progress.done} total={progress.total} etaSec={progress.etaSec} beating={isProcessing}/>
             </div>
@@ -1310,7 +1325,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">11</div>
-                <div><div className="sec-title">Console Output</div></div>
+                <div><div className="sec-title">{tr.sec_console_title}</div></div>
               </div>
               <div className="console-wrap">
                 <div className="console-bar">
@@ -1328,7 +1343,7 @@ export default function Home() {
                 </div>
                 <div className="console-body" ref={logRef}>
                   {filteredLogs.length===0?(
-                    <div className="console-empty">Belum ada log. Upload pack lalu klik Optimize atau Analyze.</div>
+                    <div className="console-empty">{tr.console_empty}</div>
                   ):(
                     filteredLogs.map((l,i)=><div key={i} className={`cl ${classifyLog(l)}`}>{l}</div>)
                   )}
@@ -1341,9 +1356,9 @@ export default function Home() {
               <div className="glass-section fade-in">
                 <div className="sec-header">
                   <div className="sec-num" style={{background:"rgba(96,165,250,0.15)",color:"var(--blue)"}}>🔍</div>
-                  <div><div className="sec-title">Hasil Analisis</div><div className="sec-sub">Scan pack tanpa proses optimize</div></div>
+                  <div><div className="sec-title">{tr.sec_analyzer_title}</div><div className="sec-sub">{tr.sec_analyzer_sub}</div></div>
                 </div>
-                <AnalyzerResult data={analyzerResult}/>
+                <AnalyzerResult data={analyzerResult} tr={tr}/>
               </div>
             )}
 
@@ -1360,21 +1375,21 @@ export default function Home() {
                   <div className="savings-sizes">{(summary.originalSize/1e6).toFixed(2)} MB → {(summary.optimizedSize/1e6).toFixed(2)} MB</div>
                 </div>
                 <div className="summary-grid">
-                  <SummaryCard label="PNG Dioptimasi" value={`${summary.pngOptimized}/${summary.pngCount}`}/>
-                  <SummaryCard label="PNG Skipped" value={summary.pngSkippedByIHDR}/>
-                  {summary.pngSingleColor>0&&<SummaryCard label="Single-Color→1×1" value={summary.pngSingleColor}/>}
-                  {summary.pngAlphaCleaned>0&&<SummaryCard label="Alpha Cleaned" value={summary.pngAlphaCleaned}/>}
-                  {summary.pngPowerOfTwo>0&&<SummaryCard label="Power-of-Two" value={summary.pngPowerOfTwo}/>}
-                  {summary.oggCount>0&&<SummaryCard label="OGG Optimized" value={`${summary.oggOptimized}/${summary.oggCount}`}/>}
-                  <SummaryCard label="JSON Minified" value={`${summary.jsonMinified}/${summary.jsonCount}`}/>
-                  {summary.jsonDeepCleaned>0&&<SummaryCard label="JSON Deep Clean" value={summary.jsonDeepCleaned}/>}
-                  {summary.jsonKeySorted>0&&<SummaryCard label="JSON Key Sort" value={summary.jsonKeySorted}/>}
-                  {summary.shaderCount>0&&<SummaryCard label="Shader Minified" value={`${summary.shaderMinified}/${summary.shaderCount}`}/>}
-                  {summary.langCount>0&&<SummaryCard label=".lang Minified" value={summary.langCount}/>}
-                  {summary.bbmodelCount>0&&<SummaryCard label=".bbmodel Cleaned" value={summary.bbmodelCount}/>}
-                  {summary.oversizedWarnings>0&&<SummaryCard label="⚠️ Oversized" value={summary.oversizedWarnings}/>}
-                  <SummaryCard label="File Dihapus" value={summary.removed}/>
-                  <SummaryCard label="Workers" value={summary.workers}/>
+                  <SummaryCard label=tr.sum_png value={`${summary.pngOptimized}/${summary.pngCount}`}/>
+                  <SummaryCard label=tr.sum_png_skip value={summary.pngSkippedByIHDR}/>
+                  {summary.pngSingleColor>0&&<SummaryCard label=tr.sum_single value={summary.pngSingleColor}/>}
+                  {summary.pngAlphaCleaned>0&&<SummaryCard label=tr.sum_alpha value={summary.pngAlphaCleaned}/>}
+                  {summary.pngPowerOfTwo>0&&<SummaryCard label=tr.sum_pow2 value={summary.pngPowerOfTwo}/>}
+                  {summary.oggCount>0&&<SummaryCard label=tr.sum_ogg value={`${summary.oggOptimized}/${summary.oggCount}`}/>}
+                  <SummaryCard label=tr.sum_json value={`${summary.jsonMinified}/${summary.jsonCount}`}/>
+                  {summary.jsonDeepCleaned>0&&<SummaryCard label=tr.sum_deep value={summary.jsonDeepCleaned}/>}
+                  {summary.jsonKeySorted>0&&<SummaryCard label=tr.sum_keysort value={summary.jsonKeySorted}/>}
+                  {summary.shaderCount>0&&<SummaryCard label=tr.sum_shader value={`${summary.shaderMinified}/${summary.shaderCount}`}/>}
+                  {summary.langCount>0&&<SummaryCard label=tr.sum_lang value={summary.langCount}/>}
+                  {summary.bbmodelCount>0&&<SummaryCard label=tr.sum_bbmodel value={summary.bbmodelCount}/>}
+                  {summary.oversizedWarnings>0&&<SummaryCard label=tr.sum_oversized value={summary.oversizedWarnings}/>}
+                  <SummaryCard label=tr.sum_removed value={summary.removed}/>
+                  <SummaryCard label=tr.sum_workers value={summary.workers}/>
                   {summary.sha1&&(
                     <div className="sum-card" style={{gridColumn:"1/-1"}}>
                       <div className="sum-label">SHA-1 Hash</div>
@@ -1388,7 +1403,7 @@ export default function Home() {
                 {/* Fase 4: Share */}
                 <ShareResults summary={summary}/>
                 <p style={{textAlign:"center",fontSize:12,color:"var(--text-muted)",marginTop:16}}>
-                  ✅ <code>optimize_file.zip</code> sudah ter-download · Credit ghaa sudah diinjeksi
+                  ✅ <code>optimize_file.zip</code> {tr.sum_done}
                 </p>
               </div>
             )}
@@ -1397,7 +1412,7 @@ export default function Home() {
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num" style={{background:"linear-gradient(135deg,#8b5cf6,#6d28d9)"}}>🏷️</div>
-                <div><div className="sec-title">Badge Generator</div><div className="sec-sub">Tambahkan badge 'Optimized with Ghaizers' ke README pack kamu</div></div>
+                <div><div className="sec-title">{tr.sec_badge_title}</div><div className="sec-sub">{tr.sec_badge_sub}</div></div>
               </div>
               <BadgeGenerator/>
             </div>
@@ -1422,7 +1437,7 @@ export default function Home() {
                 style={{flex:1}}
                 onClick={handleOptimize}
                 disabled={isProcessing||isAnalyzing||!file}>
-                {isProcessing?`🔄 Mengoptimasi... ${progressPct}%`:!file?"📦 Upload pack dulu":"✨ OPTIMIZE SEKARANG"}
+                {isProcessing?`${tr.btn_optimizing} ${progressPct}%`:!file?tr.btn_upload_first:tr.btn_optimize}
               </button>
             </div>
           </div>
@@ -1431,10 +1446,9 @@ export default function Home() {
           <footer className="footer">
             <div className="footer-logo">⚡ GHAIZERS 2.0</div>
             <div className="footer-by">Made with 💚 by <strong style={{color:"var(--green)"}}>ghaa</strong> (KhaizenNomazen)</div>
-            <div className="footer-free">🆓 Tool ini GRATIS selamanya — Jangan bayar siapapun untuk ini!</div>
+            <div className="footer-free">{tr.footer_free}</div>
             <div className="footer-legal">
-              ⚖️ Menjual tool ini = Pelanggaran UU Hak Cipta No. 28/2014<br/>
-              Pidana max 10 tahun · Denda max Rp 4.000.000.000
+              {tr.footer_legal}
             </div>
             <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer"
               style={{display:"block",color:"var(--green)",fontSize:12,marginBottom:16}}>
