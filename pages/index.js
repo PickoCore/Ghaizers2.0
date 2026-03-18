@@ -1379,7 +1379,7 @@ export default function Home() {
                   <SummaryCard label={tr.sum_png_skip} value={summary.pngSkippedByIHDR}/>
                   {summary.pngSingleColor>0&&<SummaryCard label={tr.sum_single} value={summary.pngSingleColor}/>}
                   {summary.pngAlphaCleaned>0&&<SummaryCard label={tr.sum_alpha} value={summary.pngAlphaCleaned}/>}
-                  {summary.pngPowerOfTwo>0&&<SummaryCard label={tr.sum_pow}2 value={summary.pngPowerOfTwo}/>}
+                  {summary.pngPowerOfTwo>0&&<SummaryCard label={tr.sum_pow2} value={summary.pngPowerOfTwo}/>}
                   {summary.oggCount>0&&<SummaryCard label={tr.sum_ogg} value={`${summary.oggOptimized}/${summary.oggCount}`}/>}
                   <SummaryCard label={tr.sum_json} value={`${summary.jsonMinified}/${summary.jsonCount}`}/>
                   {summary.jsonDeepCleaned>0&&<SummaryCard label={tr.sum_deep} value={summary.jsonDeepCleaned}/>}
