@@ -1375,21 +1375,21 @@ export default function Home() {
                   <div className="savings-sizes">{(summary.originalSize/1e6).toFixed(2)} MB → {(summary.optimizedSize/1e6).toFixed(2)} MB</div>
                 </div>
                 <div className="summary-grid">
-                  <SummaryCard label=tr.sum_png value={`${summary.pngOptimized}/${summary.pngCount}`}/>
-                  <SummaryCard label=tr.sum_png_skip value={summary.pngSkippedByIHDR}/>
-                  {summary.pngSingleColor>0&&<SummaryCard label=tr.sum_single value={summary.pngSingleColor}/>}
-                  {summary.pngAlphaCleaned>0&&<SummaryCard label=tr.sum_alpha value={summary.pngAlphaCleaned}/>}
-                  {summary.pngPowerOfTwo>0&&<SummaryCard label=tr.sum_pow2 value={summary.pngPowerOfTwo}/>}
-                  {summary.oggCount>0&&<SummaryCard label=tr.sum_ogg value={`${summary.oggOptimized}/${summary.oggCount}`}/>}
-                  <SummaryCard label=tr.sum_json value={`${summary.jsonMinified}/${summary.jsonCount}`}/>
-                  {summary.jsonDeepCleaned>0&&<SummaryCard label=tr.sum_deep value={summary.jsonDeepCleaned}/>}
-                  {summary.jsonKeySorted>0&&<SummaryCard label=tr.sum_keysort value={summary.jsonKeySorted}/>}
-                  {summary.shaderCount>0&&<SummaryCard label=tr.sum_shader value={`${summary.shaderMinified}/${summary.shaderCount}`}/>}
-                  {summary.langCount>0&&<SummaryCard label=tr.sum_lang value={summary.langCount}/>}
-                  {summary.bbmodelCount>0&&<SummaryCard label=tr.sum_bbmodel value={summary.bbmodelCount}/>}
-                  {summary.oversizedWarnings>0&&<SummaryCard label=tr.sum_oversized value={summary.oversizedWarnings}/>}
-                  <SummaryCard label=tr.sum_removed value={summary.removed}/>
-                  <SummaryCard label=tr.sum_workers value={summary.workers}/>
+                  <SummaryCard label={tr.sum_png} value={`${summary.pngOptimized}/${summary.pngCount}`}/>
+                  <SummaryCard label={tr.sum_png_skip} value={summary.pngSkippedByIHDR}/>
+                  {summary.pngSingleColor>0&&<SummaryCard label={tr.sum_single} value={summary.pngSingleColor}/>}
+                  {summary.pngAlphaCleaned>0&&<SummaryCard label={tr.sum_alpha} value={summary.pngAlphaCleaned}/>}
+                  {summary.pngPowerOfTwo>0&&<SummaryCard label={tr.sum_pow}2 value={summary.pngPowerOfTwo}/>}
+                  {summary.oggCount>0&&<SummaryCard label={tr.sum_ogg} value={`${summary.oggOptimized}/${summary.oggCount}`}/>}
+                  <SummaryCard label={tr.sum_json} value={`${summary.jsonMinified}/${summary.jsonCount}`}/>
+                  {summary.jsonDeepCleaned>0&&<SummaryCard label={tr.sum_deep} value={summary.jsonDeepCleaned}/>}
+                  {summary.jsonKeySorted>0&&<SummaryCard label={tr.sum_keysort} value={summary.jsonKeySorted}/>}
+                  {summary.shaderCount>0&&<SummaryCard label={tr.sum_shader} value={`${summary.shaderMinified}/${summary.shaderCount}`}/>}
+                  {summary.langCount>0&&<SummaryCard label={tr.sum_lang} value={summary.langCount}/>}
+                  {summary.bbmodelCount>0&&<SummaryCard label={tr.sum_bbmodel} value={summary.bbmodelCount}/>}
+                  {summary.oversizedWarnings>0&&<SummaryCard label={tr.sum_oversized} value={summary.oversizedWarnings}/>}
+                  <SummaryCard label={tr.sum_removed} value={summary.removed}/>
+                  <SummaryCard label={tr.sum_workers} value={summary.workers}/>
                   {summary.sha1&&(
                     <div className="sum-card" style={{gridColumn:"1/-1"}}>
                       <div className="sum-label">SHA-1 Hash</div>
