@@ -875,11 +875,13 @@ export default function Home() {
   // page routing (Fase 4)
   const [currentPage, setCurrentPage] = useState("home");
 
-  // i18n
+  // i18n — init "id" agar SSR tidak error, detect di client via useEffect
   const [lang, setLang] = useState("id");
-  const tr = TRANSLATIONS[lang] || TRANSLATIONS["id"];
-  useEffect(() => { setLang(detectLanguage()); }, []);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); setLang(detectLanguage()); }, []);
   const toggleLang = () => setLang(l => l === "id" ? "en" : "id");
+  // tr selalu ada: saat SSR pakai "id", saat client pakai hasil detect
+  const tr = TRANSLATIONS[lang] || TRANSLATIONS["id"];
 
   // optimizer settings
   const [mode, setMode] = useState("normal");
@@ -1163,9 +1165,6 @@ export default function Home() {
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
-  // SSR guard — tr harus selalu ada sebelum render
-  if (!tr) return null;
-
   return (
     <>
       <Head>
