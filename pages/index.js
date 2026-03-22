@@ -149,9 +149,7 @@ function parsePojavLog(text) {
     serverPackRequired:/This server requires a custom resource pack/i,
   };
 
-  const lines = text.split(/
-?
-/);
+  const lines = text.split(/\r?\n/);
   let inShaderFailBlock = false;
   let currentOverlayName = "";
 
