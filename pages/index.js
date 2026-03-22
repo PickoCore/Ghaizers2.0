@@ -604,7 +604,7 @@ function SummaryCard({label,value}){
 /* ─────────────────────────────────────────
    ANALYZER RESULT COMPONENT (Fase 3)
 ───────────────────────────────────────── */
-function AnalyzerResult({data,tr=TRANSLATIONS.id}){
+function AnalyzerResult({data,tr}){ tr=tr||TRANSLATIONS["id"];
   const [activeTab, setActiveTab] = useState("overview");
   if(!data) return null;
   const topFiles = [...data.fileList].sort((a,b)=>b.size-a.size).slice(0,10);
@@ -801,7 +801,7 @@ const CHANGELOG_DATA = [
   { version:"v1.x", date:"2024", changes:["Alpha pixel cleanup","Single-color detection → 1×1","Deep JSON clean","OGG safe strip","Shader/properties minify","Web Workers multi-thread","Pojav Log Auto-Fix","SHA-1 verification","SEO (sitemap, robots.txt, meta tags)"] },
 ];
 
-function DocsPage({tr=TRANSLATIONS.id}){
+function DocsPage({tr}){ tr=tr||TRANSLATIONS["id"];
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
       <h2 className="page-h2">{tr.docs_title}</h2>
@@ -821,7 +821,7 @@ function DocsPage({tr=TRANSLATIONS.id}){
   );
 }
 
-function FaqPage({tr=TRANSLATIONS.id}){
+function FaqPage({tr}){ tr=tr||TRANSLATIONS["id"];
   const [open, setOpen] = useState(null);
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
@@ -844,7 +844,7 @@ function FaqPage({tr=TRANSLATIONS.id}){
   );
 }
 
-function ChangelogPage({tr=TRANSLATIONS.id}){
+function ChangelogPage({tr}){ tr=tr||TRANSLATIONS["id"];
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
       <h2 className="page-h2">{tr.changelog_title}</h2>
@@ -877,7 +877,7 @@ export default function Home() {
 
   // i18n
   const [lang, setLang] = useState("id");
-  const tr = TRANSLATIONS[lang];
+  const tr = TRANSLATIONS[lang] || TRANSLATIONS["id"];
   useEffect(() => { setLang(detectLanguage()); }, []);
   const toggleLang = () => setLang(l => l === "id" ? "en" : "id");
 
@@ -1163,6 +1163,9 @@ export default function Home() {
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
+  // SSR guard — tr harus selalu ada sebelum render
+  if (!tr) return null;
+
   return (
     <>
       <Head>
