@@ -1,4 +1,5 @@
 import Head from "next/head";
+import Link from "next/link";
 import { TRANSLATIONS, detectLanguage, t } from "../lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
@@ -86,15 +87,159 @@ function shouldExcludeNonGameFile(lower, name) {
 }
 
 function parsePojavLog(text) {
-  const enforceStrip=new Set(), missing=new Set();
-  const reStrip=/size .*? is not multiple of frame size|not multiple of frame size/i;
-  const rePathPng=/(['"])([^'"]+?\.png)\1/i;
-  const reMissing=/Missing sprite.*?([^\s]+?\.png)/i;
-  for (const line of text.split(/\r?\n/)) {
-    if (reStrip.test(line)) { const m=rePathPng.exec(line); if(m&&m[2]) enforceStrip.add(m[2].toLowerCase()); }
-    const mm=reMissing.exec(line); if(mm&&mm[1]) missing.add(mm[1].toLowerCase());
+  // ── Result buckets ──────────────────────────────────────────
+  const enforceStrip   = new Set(); // animated strip mismatch → needs resize fix
+  const missing        = new Set(); // missing sprite/texture
+  const shaderErrors   = new Set(); // incompatible GLSL version (MobileGlues)
+  const overlayErrors  = new Set(); // pack.mcmeta overlay missing min/max_format
+  const soundErrors    = new Set(); // unknown soundEvent
+  const atlasErrors    = new Set(); // unable to fit texture in atlas
+  const modelErrors    = new Set(); // missing/invalid block model
+  const hashErrors     = new Set(); // file hash mismatch on download
+  const crashCauses    = [];        // resource reload failed causes
+
+  // ── Regex patterns (dari analisis log nyata + riset GitHub) ─
+  const RE = {
+    // [CONFIRMED LOG] size X is not multiple of frame size
+    strip:        /size\s+\S+\s+is not multiple of frame size|not multiple of frame size/i,
+    stripPath:    /(['"])([^'"]+?\.png)/i,
+
+    // [CONFIRMED LOG] Missing sprite / Unable to load texture / FileNotFound
+    missingSprite:/Missing (?:sprite|texture)\s*[:\-]?\s*(\S+\.(?:png|json))/i,
+    missingFile:  /Unable to load (?:texture|model|sound)\s*[:\-]?\s*['"]?(\S+\.(?:png|json|ogg))['"]?/i,
+
+    // [CONFIRMED LOG] Couldn't compile vertex/fragment shader — GLSL version mismatch
+    shaderCompile:/Couldn't compile (?:vertex|fragment) shader\s*\(([^)]+)\)/i,
+    shaderVersion:/#version\s+(\d+)(?!\s+es)/,           // version tanpa 'es' = desktop GL → incompatible
+    shaderVersionLine:/Language version '(\d+)' unknown/i, // dari log: "Language version '150' unknown"
+
+    // [CONFIRMED LOG] Failed to load required shader programs
+    shaderFailed: /Failed to load required shader programs?/i,
+    shaderPipeline:/^\s*-\s*([\w:\/]+pipeline\/[\w\/]+)/,
+
+    // [CONFIRMED LOG] Caught error loading resourcepacks
+    reloadFailed: /Caught error loading resourcepacks|Resource reload failed|Failed to load resourcepack/i,
+
+    // [CONFIRMED LOG] Overlay missing min_format/max_format (ItemsAdder issue)
+    overlayErr:   /overlays metadata.*Overlay "([^"]+)" declares support for version newer than (\d+)/i,
+    overlayMiss:  /missing mandatory fields min_format and max_format/i,
+
+    // [CONFIRMED LOG] Unable to play unknown soundEvent
+    soundEvent:   /Unable to play unknown soundEvent:\s*([\w:.\/]+)/i,
+
+    // Atlas overflow (common Pojav issue — too many textures)
+    atlasOverflow:/Unable to fit:\s*(\S+)\s*[—-]\s*size:\s*(\d+x\d+)/i,
+    atlasSize:    /Cannot fit all textures into atlas/i,
+
+    // [CONFIRMED LOG] Missing block model
+    missingModel: /Missing (?:block )?model:\s*(\S+)/i,
+
+    // [CONFIRMED LOG] File hash mismatch on server pack download
+    hashMismatch: /not found or had mismatched hash/i,
+    hashFile:     /Existing file\s+(\S+)\s+not found/i,
+
+    // JSON parse error in pack files
+    jsonError:    /com\.google\.gson\.JsonParseException|Malformed JSON|JsonSyntaxException/i,
+    jsonFile:     /in file ['"]?([^'":\s]+\.(?:json|mcmeta))['"]?/i,
+
+    // Atlas stitch error (texture too large)
+    stitchErr:    /Stitching failed|Texture too large|Texture atlas.*full/i,
+
+    // Server pack disconnect
+    serverPackRequired:/This server requires a custom resource pack/i,
+  };
+
+  const lines = text.split(/
+?
+/);
+  let inShaderFailBlock = false;
+  let currentOverlayName = "";
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lower = line.toLowerCase();
+
+    // ── Animated strip mismatch ────────────────────────────────
+    if (RE.strip.test(line)) {
+      const m = RE.stripPath.exec(line);
+      if (m && m[2]) enforceStrip.add(m[2].toLowerCase());
+    }
+
+    // ── Missing sprite / texture / file ───────────────────────
+    const mSprite = RE.missingSprite.exec(line);
+    if (mSprite) missing.add(mSprite[1].toLowerCase());
+    const mFile = RE.missingFile.exec(line);
+    if (mFile) missing.add(mFile[1].toLowerCase());
+
+    // ── Shader compile error ───────────────────────────────────
+    const mShaderVersion = RE.shaderVersionLine.exec(line);
+    if (mShaderVersion) {
+      const ver = parseInt(mShaderVersion[1]);
+      shaderErrors.add(`GLSL #version ${ver} tidak support di MobileGlues/OpenGL ES (max #version 320 es). Pack mengandung desktop shader.`);
+    }
+    const mShaderCompile = RE.shaderCompile.exec(line);
+    if (mShaderCompile) shaderErrors.add(`Shader gagal compile: ${mShaderCompile[1]}`);
+
+    // ── Failed shader pipeline (multi-line block) ──────────────
+    if (RE.shaderFailed.test(line)) {
+      inShaderFailBlock = true;
+      crashCauses.push("Shader pipeline gagal dimuat — kemungkinan pack mengandung shader desktop GL yang tidak kompatibel dengan MobileGlues/Pojav.");
+    }
+    if (inShaderFailBlock) {
+      const mPipe = RE.shaderPipeline.exec(line);
+      if (mPipe) shaderErrors.add(`Pipeline gagal: ${mPipe[1]}`);
+      if (line.trim() === "" || line.includes("at java.") || line.includes("at knot//")) inShaderFailBlock = false;
+    }
+
+    // ── Resource reload failed ─────────────────────────────────
+    if (RE.reloadFailed.test(line)) {
+      crashCauses.push("Resource pack gagal dimuat dan dihapus dari list. Cek error shader atau overlay di atas.");
+    }
+
+    // ── ItemsAdder / Overlay metadata error ───────────────────
+    const mOverlay = RE.overlayErr.exec(line);
+    if (mOverlay) {
+      currentOverlayName = mOverlay[1];
+      overlayErrors.add(`Overlay "${mOverlay[1]}" pack_format > ${mOverlay[2]}: missing min_format & max_format di pack.mcmeta overlays section.`);
+    }
+    if (RE.overlayMiss.test(line) && currentOverlayName) {
+      overlayErrors.add(`Fix: tambahkan min_format dan max_format ke overlay "${currentOverlayName}" di pack.mcmeta`);
+    }
+
+    // ── Unknown sound event ────────────────────────────────────
+    const mSound = RE.soundEvent.exec(line);
+    if (mSound) soundErrors.add(mSound[1]);
+
+    // ── Atlas overflow ─────────────────────────────────────────
+    const mAtlas = RE.atlasOverflow.exec(line);
+    if (mAtlas) atlasErrors.add(`${mAtlas[1]} (${mAtlas[2]})`);
+    if (RE.atlasSize.test(line)) atlasErrors.add("Atlas penuh — terlalu banyak/besar texture");
+
+    // ── Missing block model ────────────────────────────────────
+    const mModel = RE.missingModel.exec(line);
+    if (mModel) modelErrors.add(mModel[1]);
+
+    // ── Hash mismatch ──────────────────────────────────────────
+    if (RE.hashMismatch.test(line)) {
+      const mHash = RE.hashFile.exec(line);
+      hashErrors.add(mHash ? mHash[1] : "File pack server hash mismatch — pack akan didownload ulang");
+    }
   }
-  return { enforceStrip:[...enforceStrip], missing:[...missing] };
+
+  return {
+    enforceStrip:  [...enforceStrip],
+    missing:       [...missing],
+    shaderErrors:  [...shaderErrors],
+    overlayErrors: [...overlayErrors],
+    soundErrors:   [...soundErrors],
+    atlasErrors:   [...atlasErrors],
+    modelErrors:   [...modelErrors],
+    hashErrors:    [...hashErrors],
+    crashCauses:   [...new Set(crashCauses)],
+    // Summary
+    hasResourceReloadFailed: crashCauses.length > 0,
+    totalIssues: enforceStrip.size + missing.size + shaderErrors.size + overlayErrors.size + soundErrors.size + atlasErrors.size + modelErrors.size,
+  };
 }
 
 function uniqueLower(arr) {
@@ -1299,9 +1444,57 @@ export default function Home() {
                 onChange={async e=>{
                   const f=e.target.files?.[0];if(!f)return;
                   const text=await f.text();const parsed=parsePojavLog(text);
-                  if(parsed.enforceStrip.length>0){appendLog(`Auto-Fix: ${parsed.enforceStrip.length} path.`);setDynamicStripPaths(prev=>uniqueLower([...prev,...parsed.enforceStrip]));}
-                  else appendLog("Auto-Fix: tidak ada path bermasalah.");
-                  if(parsed.missing.length>0)appendLog(`Missing: ${parsed.missing.length} sprite`);
+                  // ── Animated strip fix ──
+                  if(parsed.enforceStrip.length>0){
+                    appendLog(`🔧 Auto-Fix: ${parsed.enforceStrip.length} path animated strip bermasalah → akan di-enforce resize.`);
+                    setDynamicStripPaths(prev=>uniqueLower([...prev,...parsed.enforceStrip]));
+                  } else {
+                    appendLog("✔ Auto-Fix: tidak ada animated strip bermasalah di log.");
+                  }
+                  // ── Resource reload failed ──
+                  if(parsed.hasResourceReloadFailed){
+                    appendLog("⚠️ RESOURCE RELOAD FAILED terdeteksi di log ini!");
+                    parsed.crashCauses.forEach(c=>appendLog(`   → ${c}`));
+                  }
+                  // ── Shader errors ──
+                  if(parsed.shaderErrors.length>0){
+                    appendLog(`⚠️ Shader Error: ${parsed.shaderErrors.length} masalah shader ditemukan.`);
+                    parsed.shaderErrors.slice(0,3).forEach(e=>appendLog(`   • ${e}`));
+                    appendLog("   💡 Ini masalah kompatibilitas desktop GL shader vs MobileGlues — tidak bisa difix oleh optimizer. Hubungi admin server untuk update pack.");
+                  }
+                  // ── Overlay / ItemsAdder errors ──
+                  if(parsed.overlayErrors.length>0){
+                    appendLog(`⚠️ Overlay Metadata Error: ${parsed.overlayErrors.length} masalah ditemukan.`);
+                    parsed.overlayErrors.forEach(e=>appendLog(`   • ${e}`));
+                  }
+                  // ── Sound errors ──
+                  if(parsed.soundErrors.length>0){
+                    appendLog(`⚠️ Sound Error: ${parsed.soundErrors.length} unknown soundEvent.`);
+                    parsed.soundErrors.slice(0,5).forEach(s=>appendLog(`   • ${s}`));
+                  }
+                  // ── Missing textures ──
+                  if(parsed.missing.length>0){
+                    appendLog(`⚠️ Missing texture/sprite: ${parsed.missing.length} file tidak ditemukan.`);
+                  }
+                  // ── Atlas overflow ──
+                  if(parsed.atlasErrors.length>0){
+                    appendLog(`⚠️ Atlas Error: ${parsed.atlasErrors.length} texture tidak muat di atlas.`);
+                    parsed.atlasErrors.slice(0,3).forEach(e=>appendLog(`   • ${e}`));
+                  }
+                  // ── Model errors ──
+                  if(parsed.modelErrors.length>0){
+                    appendLog(`⚠️ Missing Model: ${parsed.modelErrors.length} model tidak ditemukan.`);
+                  }
+                  // ── Hash mismatch ──
+                  if(parsed.hashErrors.length>0){
+                    appendLog(`ℹ️ Hash mismatch: ${parsed.hashErrors.length} file pack akan didownload ulang otomatis.`);
+                  }
+                  // ── Summary ──
+                  if(parsed.totalIssues===0 && !parsed.hasResourceReloadFailed){
+                    appendLog("✅ Log dianalisis — tidak ada masalah resource pack yang terdeteksi.");
+                  } else {
+                    appendLog(`📊 Total: ${parsed.totalIssues} masalah terdeteksi dari log.`);
+                  }
                 }}/>
               <label htmlFor="logFile" className="upload-btn">
                 <span className="upload-btn-icon">📝</span>
@@ -1458,6 +1651,19 @@ export default function Home() {
               {[["docs","📚 Docs"],["faq","❓ FAQ"],["changelog","📋 Changelog"]].map(([page,label])=>(
                 <button key={page} className="pill" onClick={()=>setCurrentPage(page)} style={{fontSize:11}}>{label}</button>
               ))}
+            </div>
+            <div style={{display:"flex",justifyContent:"center",gap:16,marginBottom:16,flexWrap:"wrap"}}>
+              <Link href="/privacy" style={{fontSize:11,color:"var(--t3)",textDecoration:"none"}}
+                onMouseEnter={e=>e.target.style.color="var(--teal)"}
+                onMouseLeave={e=>e.target.style.color="var(--t3)"}>
+                Privacy Policy
+              </Link>
+              <span style={{color:"var(--t4)",fontSize:11}}>·</span>
+              <Link href="/terms" style={{fontSize:11,color:"var(--t3)",textDecoration:"none"}}
+                onMouseEnter={e=>e.target.style.color="var(--teal)"}
+                onMouseLeave={e=>e.target.style.color="var(--t3)"}>
+                Terms of Service
+              </Link>
             </div>
             <div className="footer-tech">
               IHDR Skip · Web Workers · OGG Safe · Alpha Cleanup · Single-Color · Pow2 · Deep JSON · JSON Sort · .lang · .bbmodel · Shader Minify · SHA-1 · Pack Analyzer · Badge Gen
