@@ -1,6 +1,8 @@
 import Head from "next/head";
 import Link from "next/link";
 import { TRANSLATIONS, detectLanguage, t } from "../lib/i18n";
+// Module-level default — selalu available saat SSR, diganti di client via state
+const TR_DEFAULT = TRANSLATIONS["id"];
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 
@@ -565,7 +567,7 @@ function classifyLog(msg) {
 /* ─────────────────────────────────────────
    COMPONENTS
 ───────────────────────────────────────── */
-function ProgressRing({pct,done,total,etaSec,beating}){
+function ProgressRing({pct,done,total,etaSec,beating,waitingText}){
   const r=44,circ=2*Math.PI*r,offset=circ-(pct/100)*circ;
   return (
     <div className="progress-ring-wrap">
@@ -576,7 +578,7 @@ function ProgressRing({pct,done,total,etaSec,beating}){
       </svg>
       <div className="ring-info">
         <span className="ring-pct">{pct}%</span>
-        <div className="ring-detail">{total>0?`${done} / ${total} file`:tr.progress_waiting}</div>
+        <div className="ring-detail">{total>0?`${done} / ${total} file`:(waitingText||"Menunggu file...")}</div>
         {etaSec!=null&&etaSec>0&&<div className="ring-eta">⏱ ETA {etaSec}s</div>}
       </div>
     </div>
@@ -604,7 +606,7 @@ function SummaryCard({label,value}){
 /* ─────────────────────────────────────────
    ANALYZER RESULT COMPONENT (Fase 3)
 ───────────────────────────────────────── */
-function AnalyzerResult({data,tr}){ tr=tr||TRANSLATIONS["id"];
+function AnalyzerResult({data,tr}){ tr=tr||TR_DEFAULT;
   const [activeTab, setActiveTab] = useState("overview");
   if(!data) return null;
   const topFiles = [...data.fileList].sort((a,b)=>b.size-a.size).slice(0,10);
@@ -801,7 +803,7 @@ const CHANGELOG_DATA = [
   { version:"v1.x", date:"2024", changes:["Alpha pixel cleanup","Single-color detection → 1×1","Deep JSON clean","OGG safe strip","Shader/properties minify","Web Workers multi-thread","Pojav Log Auto-Fix","SHA-1 verification","SEO (sitemap, robots.txt, meta tags)"] },
 ];
 
-function DocsPage({tr}){ tr=tr||TRANSLATIONS["id"];
+function DocsPage({tr}){ tr=tr||TR_DEFAULT;
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
       <h2 className="page-h2">{tr.docs_title}</h2>
@@ -821,7 +823,7 @@ function DocsPage({tr}){ tr=tr||TRANSLATIONS["id"];
   );
 }
 
-function FaqPage({tr}){ tr=tr||TRANSLATIONS["id"];
+function FaqPage({tr}){ tr=tr||TR_DEFAULT;
   const [open, setOpen] = useState(null);
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
@@ -844,7 +846,7 @@ function FaqPage({tr}){ tr=tr||TRANSLATIONS["id"];
   );
 }
 
-function ChangelogPage({tr}){ tr=tr||TRANSLATIONS["id"];
+function ChangelogPage({tr}){ tr=tr||TR_DEFAULT;
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"24px 0"}}>
       <h2 className="page-h2">{tr.changelog_title}</h2>
@@ -1511,7 +1513,7 @@ export default function Home() {
                 <div className="sec-num">10</div>
                 <div><div className="sec-title">{tr.sec_progress_title}</div></div>
               </div>
-              <ProgressRing pct={progressPct} done={progress.done} total={progress.total} etaSec={progress.etaSec} beating={isProcessing}/>
+              <ProgressRing pct={progressPct} done={progress.done} total={progress.total} etaSec={progress.etaSec} beating={isProcessing} waitingText={tr.progress_waiting}/>
             </div>
 
             {/* 11. Console */}
