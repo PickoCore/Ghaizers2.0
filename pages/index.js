@@ -1676,3 +1676,8 @@ export default function Home() {
     </>
   );
 }
+
+// Disable static prerendering — halaman ini full client-side
+export async function getServerSideProps() {
+  return { props: {} };
+}
