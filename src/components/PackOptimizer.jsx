@@ -64,7 +64,7 @@ const BASE_POLICIES = [
   { pattern:/colormap\//,         skip:true },
   { pattern:/maps\//,             skip:true },
   { pattern:/textures\/entity\//, scaleMul:0.85 },
-  { pattern:/textures\/particle\/,scaleMul:0.75, smoothing:"nearest" },
+  { pattern:/textures\/particle\//,scaleMul:0.75, smoothing:"nearest" },
   { pattern:/.*/,                 scaleMul:1.0 },
 ];
 
