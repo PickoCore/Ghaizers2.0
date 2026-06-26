@@ -1,0 +1,11 @@
+---
+import Layout from "../layouts/Layout.astro";
+import TermsContent from "../components/TermsContent.jsx";
+
+const title = "Terms of Service – Ghaizers2.0";
+const description =
+  "Syarat dan ketentuan penggunaan Ghaizers2.0 Minecraft Resource Pack Optimizer. Tool gratis, dilindungi UU Hak Cipta No. 28 Tahun 2014 — dilarang dijual kembali.";
+---
+<Layout title={title} description={description} path="/terms">
+  <TermsContent client:load />
+</Layout>

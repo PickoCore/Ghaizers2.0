@@ -1,0 +1,42 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PackOptimizer from "../components/PackOptimizer.jsx";
+
+const title = "Minecraft Resource Pack Optimizer Gratis – Ghaizers2.0";
+const description =
+  "Optimize resource pack Minecraft gratis. Kompres PNG, minify JSON, optimize OGG tanpa kehilangan kualitas. Cocok untuk Pojav Launcher, HP low-end, dan Bedrock. 100% berjalan di browser, tanpa upload ke server.";
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "Apakah Ghaizers2.0 benar-benar gratis?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Ya, 100% gratis dan berjalan sepenuhnya di browser kamu (client-side), tanpa upload file ke server manapun.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Apakah resource pack Minecraft saya aman saat dioptimasi?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Aman. Semua proses kompresi PNG, JSON, dan OGG terjadi langsung di perangkat kamu sehingga file tidak pernah dikirim ke pihak lain.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Cocok untuk perangkat apa saja?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Cocok untuk Pojav Launcher, HP/PC low-end, dan Minecraft Bedrock, karena hasil optimasi memperkecil ukuran pack secara signifikan.",
+      },
+    },
+  ],
+};
+---
+<Layout title={title} description={description} path="/" jsonLd={[faqJsonLd]}>
+  <PackOptimizer client:load />
+</Layout>

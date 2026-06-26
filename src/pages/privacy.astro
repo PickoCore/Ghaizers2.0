@@ -1,0 +1,11 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PrivacyContent from "../components/PrivacyContent.jsx";
+
+const title = "Privacy Policy – Ghaizers2.0";
+const description =
+  "Kebijakan privasi Ghaizers2.0 Minecraft Resource Pack Optimizer. Semua file diproses 100% di browser kamu, tidak ada upload atau penyimpanan data ke server.";
+---
+<Layout title={title} description={description} path="/privacy">
+  <PrivacyContent client:load />
+</Layout>
