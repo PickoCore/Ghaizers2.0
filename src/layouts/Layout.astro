@@ -29,21 +29,9 @@ const defaultJsonLd = [
     applicationCategory: "UtilitiesApplication",
     operatingSystem: "Any",
     browserRequirements: "Requires JavaScript",
-    offers: {
-      "@type": "Offer",
-      price: "0",
-      priceCurrency: "IDR",
-    },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.9",
-      ratingCount: "120",
-    },
-    author: {
-      "@type": "Person",
-      name: "ghaa (KhaizenNomazen)",
-      url: "https://github.com/KhaizenNomazen",
-    },
+    offers: { "@type": "Offer", price: "0", priceCurrency: "IDR" },
+    aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "120" },
+    author: { "@type": "Person", name: "ghaa (KhaizenNomazen)", url: "https://github.com/KhaizenNomazen" },
   },
   {
     "@context": "https://schema.org",
@@ -62,21 +50,15 @@ const ldBlocks = [...defaultJsonLd, ...jsonLd];
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-
-    <!-- Primary SEO -->
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="keywords" content={keywords} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="author" content="ghaa (KhaizenNomazen)" />
     <link rel="canonical" href={canonicalURL} />
-
-    <!-- hreflang: single-URL app with client-side ID/EN toggle -->
     <link rel="alternate" hreflang="id" href={canonicalURL} />
     <link rel="alternate" hreflang="en" href={canonicalURL} />
     <link rel="alternate" hreflang="x-default" href={canonicalURL} />
-
-    <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Ghaizers2.0" />
     <meta property="og:url" content={canonicalURL} />
@@ -87,33 +69,22 @@ const ldBlocks = [...defaultJsonLd, ...jsonLd];
     <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="id_ID" />
     <meta property="og:locale:alternate" content="en_US" />
-
-    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-
-    <!-- Performance: preconnect/preload -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-
-    <!-- Favicons / PWA -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#2dd4bf" />
-
-    <!-- Search console verification (ganti dengan milikmu jika berbeda) -->
     <meta name="google-site-verification" content="_TodwBix_GYhoYVAnOn-h5r_xxK17EWlp6wiUiLVQ0k" />
-
-    <!-- Structured data -->
     {ldBlocks.map((block) => (
       <script type="application/ld+json" set:html={JSON.stringify(block)} />
     ))}
-
     <slot name="head" />
   </head>
   <body>
