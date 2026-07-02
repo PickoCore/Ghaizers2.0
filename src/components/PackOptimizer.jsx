@@ -14,9 +14,6 @@ import {
   ChevronRight, Menu, X, Star
 } from "lucide-react";
 
-/* ─────────────────────────────────────────
-   CREDIT
-───────────────────────────────────────── */
 const CREDIT_BANNER = [
   "╔══════════════════════════════════════════════════╗",
   "║     Ghaizers2.0 — Minecraft Pack Optimizer       ║",
@@ -35,18 +32,12 @@ Lapor: github.com/KhaizenNomazen
 ================================================================`;
 const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di optimizer.ghaa.my.id";
 
-/* ─────────────────────────────────────────
-   MODES
-───────────────────────────────────────── */
 const MODES = {
   normal:  { id:"normal",  label:"Normal",       description:"Seimbang, kualitas bagus dan pack tetap ringan.", scale:0.85, maxSize:512, minSize:16, minifyJson:true },
   extreme: { id:"extreme", label:"Extreme",       description:"Sangat hemat, cocok untuk device mid–low.",      scale:0.6,  maxSize:256, minSize:8,  minifyJson:true },
   ultra:   { id:"ultra",   label:"Ultra Extreme", description:"Paling ringan, untuk HP kentang / Pojav lemah.", scale:0.4,  maxSize:128, minSize:4,  minifyJson:true },
 };
 
-/* ─────────────────────────────────────────
-   PRESETS
-───────────────────────────────────────── */
 const DEFAULT_PRESETS = {
   "pojav-lite":    { label:"Pojav Lite",     mode:"ultra",   resolutionPercent:60,  zipCompressionLevel:9, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true },
   "server-pack":   { label:"Server Pack",    mode:"extreme", resolutionPercent:80,  zipCompressionLevel:8, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:false, doJsonKeySort:true,  doLangMinify:true },
@@ -54,9 +45,6 @@ const DEFAULT_PRESETS = {
   "quality":       { label:"Quality",        mode:"normal",  resolutionPercent:100, zipCompressionLevel:6, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:false,doDeepCleanJson:true, doShaderMinify:false, doPowerOfTwo:false, doJsonKeySort:false, doLangMinify:true },
 };
 
-/* ─────────────────────────────────────────
-   POLICIES
-───────────────────────────────────────── */
 const BASE_POLICIES = [
   { pattern:/textures\/gui\//,    smoothing:"nearest", minSize:16, scaleMul:1.0 },
   { pattern:/textures\/font\//,   smoothing:"nearest", minSize:16, scaleMul:1.0, skipResize:true },
@@ -64,13 +52,10 @@ const BASE_POLICIES = [
   { pattern:/colormap\//,         skip:true },
   { pattern:/maps\//,             skip:true },
   { pattern:/textures\/entity\//, scaleMul:0.85 },
-  { pattern:/textures\/particle\//,scaleMul:0.75, smoothing:"nearest" },
+  { pattern:/textures\/particle\//, scaleMul:0.75, smoothing:"nearest" },
   { pattern:/.*/,                 scaleMul:1.0 },
 ];
 
-/* ─────────────────────────────────────────
-   UTILS
-───────────────────────────────────────── */
 function getPolicyForPath(lowerPath, dynamicStripPaths) {
   if (Array.isArray(dynamicStripPaths)) {
     for (const key of dynamicStripPaths) {
@@ -194,9 +179,6 @@ function parsePojavLog(text) {
 
 function uniqueLower(arr) { return [...new Set(arr.map(s => s.toLowerCase()))]; }
 
-/* ─────────────────────────────────────────
-   IMAGE UTILS
-───────────────────────────────────────── */
 function readPngIHDRSize(buffer) {
   try {
     const u8 = new Uint8Array(buffer);
@@ -291,9 +273,7 @@ function minifyLang(text) {
 function cleanBbmodel(text) {
   try {
     const obj = JSON.parse(text);
-    if (obj && Array.isArray(obj.outliner)) {
-      delete obj.history;
-    }
+    if (obj && Array.isArray(obj.outliner)) { delete obj.history; }
     return JSON.stringify(obj);
   } catch { return text; }
 }
@@ -332,9 +312,6 @@ async function buildPackIcon(file) {
   });
 }
 
-/* ─────────────────────────────────────────
-   ANALYZER
-───────────────────────────────────────── */
 async function analyzePackOnly(file, appendLog) {
   const zip = await JSZip.loadAsync(file);
   const entries = Object.values(zip.files).filter(e => !e.dir);
@@ -370,9 +347,6 @@ async function analyzePackOnly(file, appendLog) {
   return { totalFiles: entries.length, totalSize, fileList, pngCount, pngSize, jsonCount, jsonSize, oggCount, oggSize, shaderCount, oversized, invalidJson, duplicates, emptyFiles };
 }
 
-/* ─────────────────────────────────────────
-   COMPUTE TARGET SIZE
-───────────────────────────────────────── */
 function computeTargetSize({ w0, h0, policy, modeConfig }) {
   const frames = getFrameCount(w0, h0) || 1;
   const frameH = Math.round(h0 / frames);
@@ -385,9 +359,6 @@ function computeTargetSize({ w0, h0, policy, modeConfig }) {
   return { tW, tH, smoothing: policy.smoothing || (modeConfig.preservePixelArt ? "nearest" : "smooth") };
 }
 
-/* ─────────────────────────────────────────
-   WEB WORKER POOL
-───────────────────────────────────────── */
 function createWorkerPool(count) {
   const code = `
     function cleanAlpha(d){let n=0;for(let i=0;i<d.length;i+=4){if(d[i+3]===0&&(d[i]||d[i+1]||d[i+2])){d[i]=d[i+1]=d[i+2]=0;n++;}}return n;}
@@ -455,9 +426,6 @@ function createWorkerPool(count) {
   return { runPngJob, destroy() { workers.forEach(w => w.terminate()); URL.revokeObjectURL(url); } };
 }
 
-/* ─────────────────────────────────────────
-   LOG CLASSIFIER
-───────────────────────────────────────── */
 function classifyLog(msg) {
   const m = msg.toLowerCase();
   if (m.includes("error") || m.includes("gagal") || m.includes("invalid")) return "cl-err";
@@ -468,9 +436,6 @@ function classifyLog(msg) {
   return "";
 }
 
-/* ─────────────────────────────────────────
-   FAQ & CHANGELOG
-───────────────────────────────────────── */
 const FAQ_DATA = [
   { q:"Apakah tool ini aman?", a:"Ya, 100% aman. Semua proses berjalan di browser kamu (client-side). File packmu tidak pernah diunggah ke server manapun." },
   { q:"Kenapa file ZIP error saat diupload?", a:"Kemungkinan file ZIP dibuat dengan tool non-standard (WinRAR setting khusus). Solusi: extract dulu dengan ZArchiver/7-Zip, lalu zip ulang." },
@@ -486,10 +451,6 @@ const CHANGELOG_DATA = [
   { version:"v2.0", date:"2025", changes:["Hero section & landing page baru","Drag & Drop zone dengan animasi","Progress ring SVG animated","Console dengan syntax highlighting & filter","Pack Analyzer (scan tanpa optimize)","Power-of-two enforcement","JSON key sorting untuk better compression",".lang & .bbmodel support","System file auto-skip (.DS_Store, Thumbs.db)","Preset system (Pojav Lite, Server Pack, dll)","Share hasil & badge generator","Halaman FAQ & Changelog"] },
   { version:"v1.x", date:"2024", changes:["Alpha pixel cleanup","Single-color detection → 1×1","Deep JSON clean","OGG safe strip","Shader/properties minify","Web Workers multi-thread","Pojav Log Auto-Fix","SHA-1 verification","SEO (sitemap, robots.txt, meta tags)"] },
 ];
-
-/* ═══════════════════════════════════════
-   COMPONENTS
-═══════════════════════════════════════ */
 
 function ProgressRing({ pct, done, total, etaSec, beating, waitingText }) {
   const r = 44, circ = 2 * Math.PI * r, offset = circ - (pct / 100) * circ;
@@ -522,10 +483,8 @@ function ProgressRing({ pct, done, total, etaSec, beating, waitingText }) {
 
 function CheckItem({ checked, onChange, label, desc, disabled }) {
   return (
-    <div
-      className={`check-item${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
-      onClick={() => !disabled && onChange(!checked)}
-    >
+    <div className={`check-item${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
+      onClick={() => !disabled && onChange(!checked)}>
       <div className="check-box">
         {checked && <Check size={9} strokeWidth={3.5} className="check-tick" style={{ color:"#000" }}/>}
       </div>
@@ -552,26 +511,21 @@ function AnalyzerResult({ data, tr }) {
   if (!data) return null;
   const topFiles = [...data.fileList].sort((a, b) => b.size - a.size).slice(0, 10);
   const fmt = n => n >= 1e6 ? `${(n/1e6).toFixed(2)}MB` : n >= 1e3 ? `${(n/1e3).toFixed(1)}KB` : `${n}B`;
-
   const TABS = [
     { id:"overview", label:"Overview", icon:BarChart3 },
     { id:"files", label:"Top Files", icon:List },
     { id:"issues", label:"Issues", icon:AlertTriangle },
   ];
-
   return (
     <div style={{ marginTop:16 }}>
       <div style={{ display:"flex", gap:4, marginBottom:16, borderBottom:"1px solid var(--border-faint)", paddingBottom:12 }}>
         {TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setActiveTab(id)}
-            className={`tab-btn${activeTab === id ? " on" : ""}`}
+          <button key={id} onClick={() => setActiveTab(id)} className={`tab-btn${activeTab === id ? " on" : ""}`}
             style={{ display:"flex", alignItems:"center", gap:5 }}>
-            <Icon size={13}/>
-            {label}
+            <Icon size={13}/>{label}
           </button>
         ))}
       </div>
-
       {activeTab === "overview" && (
         <div>
           <div className="summary-grid" style={{ marginBottom:16 }}>
@@ -598,7 +552,6 @@ function AnalyzerResult({ data, tr }) {
           </div>
         </div>
       )}
-
       {activeTab === "files" && (
         <div style={{ background:"var(--bg-base)", borderRadius:"var(--r-sm)", overflow:"hidden", border:"1px solid var(--border-faint)" }}>
           <div style={{ padding:"9px 14px", background:"var(--bg-elevated)", fontSize:10, color:"var(--text-disabled)", display:"flex", justifyContent:"space-between", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.5px" }}>
@@ -612,7 +565,6 @@ function AnalyzerResult({ data, tr }) {
           ))}
         </div>
       )}
-
       {activeTab === "issues" && (
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {data.oversized.length > 0 && (
@@ -717,7 +669,6 @@ function ShareResults({ summary }) {
   );
 }
 
-/* ─── DOCS PAGE ────────────────────────── */
 const DOCS_ITEMS = [
   { title:"PNG Optimization", icon:FileImage, content:"Ghaizers menggunakan beberapa teknik untuk PNG:\n\n• Smart Resize: Scale texture berdasarkan mode yang dipilih, dengan kategori policy per folder (GUI, font, entity, particle)\n• Alpha Pixel Cleanup: Zero-out RGB pada pixel fully transparent (alpha=0). Tidak ada perubahan visual, tapi entropy PNG turun dan ZIP menjadi lebih kecil\n• Single-Color Detection: Deteksi PNG yang semua pixelnya identik warna → resize ke 1×1px\n• Power-of-Two: Snap ukuran ke dimensi 2^n terdekat (16,32,64...) untuk GPU efficiency\n• Size Guard: Jika hasil resize lebih besar dari original, file asli digunakan" },
   { title:"JSON Optimization", icon:FileJson, content:"• JSON Minify: Hapus semua whitespace dan newline yang tidak diperlukan Minecraft\n• Deep Clean: Hapus field comment (__comment, _comment, //) yang dibuat Blockbench dan tool lain\n• Key Sorting: Sort keys alphabetically untuk better DEFLATE compression\n• Sounds.json: Hapus entry dengan array sounds kosong\n• .mcmeta: Edit langsung di interface, credit ghaa otomatis diinjeksi" },
@@ -761,9 +712,7 @@ function FaqPage({ tr }) {
               <div className="faq-q-text">{item.q}</div>
               <ChevronDown size={15} className="faq-chevron"/>
             </div>
-            {open === i && (
-              <div className="faq-a">{item.a}</div>
-            )}
+            {open === i && <div className="faq-a">{item.a}</div>}
           </div>
         ))}
       </div>
@@ -798,9 +747,6 @@ function ChangelogPage({ tr }) {
   );
 }
 
-/* ═══════════════════════════════════════
-   MAIN COMPONENT
-═══════════════════════════════════════ */
 const FEATURE_ITEMS = [
   { icon:FileImage, title:"PNG Smart Resize", desc:"Scale texture cerdas dengan policy per folder" },
   { icon:Zap, title:"Single-Color Detect", desc:"1px optimization → hemat 98% untuk warna solid" },
@@ -816,7 +762,6 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState("home");
   const [lang, setLang] = useState("id");
   const [mounted, setMounted] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => { setMounted(true); setLang(detectLanguage()); }, []);
   const toggleLang = () => setLang(l => l === "id" ? "en" : "id");
   const tr = TRANSLATIONS[lang] || TRANSLATIONS["id"];
@@ -972,34 +917,28 @@ export default function Home() {
         if (entry.dir) { outZip.folder(entry.name); continue; }
         const name = entry.name, lower = name.toLowerCase();
         stats.totalFiles++;
-
         if (shouldExcludeNonGameFile(lower, name)) { stats.removed++; appendLog(`Dibuang: ${name}`); tick(); continue; }
-
         if ([".fsh",".vsh",".glsl"].some(e => lower.endsWith(e))) {
           stats.shaderCount++;
           if (doShaderMinify) { const txt = await entry.async("string"); const min = minifyShader(txt); outZip.file(name, min.length<txt.length?min:txt); if(min.length<txt.length)stats.shaderMinified++; }
           else outZip.file(name, await entry.async("arraybuffer"));
           tick(); continue;
         }
-
         if (lower.endsWith(".properties")) {
           outZip.file(name, doShaderMinify ? minifyProperties(await entry.async("string")) : await entry.async("arraybuffer"));
           tick(); continue;
         }
-
         if (lower.endsWith(".lang")) {
           stats.langCount++;
           if (doLangMinify) { outZip.file(name, minifyLang(await entry.async("string"))); }
           else outZip.file(name, await entry.async("arraybuffer"));
           tick(); continue;
         }
-
         if (lower.endsWith(".bbmodel")) {
           stats.bbmodelCount++;
           outZip.file(name, cleanBbmodel(await entry.async("string")));
           tick(); continue;
         }
-
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
           const orig = await entry.async("string");
@@ -1019,7 +958,6 @@ export default function Home() {
           } catch { outZip.file(name, toWrite); }
           tick(); continue;
         }
-
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
@@ -1027,7 +965,6 @@ export default function Home() {
           else outZip.file(name, buf);
           tick(); continue;
         }
-
         if (lower.endsWith(".png")) {
           stats.pngCount++;
           const policy = getPolicyForPath(lower, dynamicStripPaths);
@@ -1051,7 +988,6 @@ export default function Home() {
           }
           outZip.file(name, res?.out || buf); tick(); continue;
         }
-
         if (lower.endsWith(".json") || lower.endsWith(".mcmeta")) {
           stats.jsonCount++;
           const txt = await entry.async("string");
@@ -1065,7 +1001,6 @@ export default function Home() {
           } else outZip.file(name, txt);
           tick(); continue;
         }
-
         outZip.file(name, await entry.async("arraybuffer")); tick();
       }
 
@@ -1091,11 +1026,8 @@ export default function Home() {
     finally { pool.destroy(); setIsProcessing(false); }
   };
 
-  /* ─────────── RENDER ─────────── */
   return (
     <>
-
-      {/* Background */}
       <div className="bg-root">
         <div className="bg-mesh"/>
         <div className="bg-grid"/>
@@ -1106,8 +1038,6 @@ export default function Home() {
       </div>
 
       <div className="page-root">
-
-        {/* Watermark */}
         <div className="watermark-bar">
           <Shield size={11}/>
           {tr.watermark}
@@ -1115,13 +1045,11 @@ export default function Home() {
           <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer">github.com/KhaizenNomazen</a>
         </div>
 
-        {/* Navbar */}
         <nav className="navbar">
-         <div className="navbar-logo" onClick={() => setCurrentPage("home")}>
+          <div className="navbar-logo" onClick={() => setCurrentPage("home")}>
             <img src="/android-chrome-192x192.png" alt="Ghaizers" className="navbar-favicon" />
             Ghaizers
           </div>
-
           <div className="navbar-links">
             {[
               ["home", "Home", null],
@@ -1129,45 +1057,26 @@ export default function Home() {
               ["faq", "FAQ", HelpCircle],
               ["changelog", "Changelog", Clock],
             ].map(([page, label, Icon]) => (
-              <button key={page}
-                className={`navbar-link${currentPage===page?" active":""}`}
-                onClick={() => setCurrentPage(page)}>
-                {Icon && <Icon size={13}/>}
-                {label}
+              <button key={page} className={`navbar-link${currentPage===page?" active":""}`} onClick={() => setCurrentPage(page)}>
+                {Icon && <Icon size={13}/>}{label}
               </button>
             ))}
             <a href="https://github.com/KhaizenNomazen" target="_blank" rel="noopener noreferrer"
               className="navbar-link navbar-link-external" style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <Github size={13}/>
-              GitHub
+              <Github size={13}/>GitHub
             </a>
-            <button onClick={toggleLang} className="lang-toggle" title={lang==="id"?"Switch to English":"Ganti ke Indonesia"}>
-              <Globe size={12}/>
-              {lang==="id" ? "ID" : "EN"}
+            <button onClick={toggleLang} className="lang-toggle">
+              <Globe size={12}/>{lang==="id" ? "ID" : "EN"}
             </button>
             <span className="navbar-version">v2.0</span>
           </div>
         </nav>
 
-        {/* ── DOCS PAGE ── */}
-        {currentPage === "docs" && (
-          <div className="optimizer-wrap"><DocsPage tr={tr}/></div>
-        )}
+        {currentPage === "docs" && <div className="optimizer-wrap"><DocsPage tr={tr}/></div>}
+        {currentPage === "faq" && <div className="optimizer-wrap"><FaqPage tr={tr}/></div>}
+        {currentPage === "changelog" && <div className="optimizer-wrap"><ChangelogPage tr={tr}/></div>}
 
-        {/* ── FAQ PAGE ── */}
-        {currentPage === "faq" && (
-          <div className="optimizer-wrap"><FaqPage tr={tr}/></div>
-        )}
-
-        {/* ── CHANGELOG PAGE ── */}
-        {currentPage === "changelog" && (
-          <div className="optimizer-wrap"><ChangelogPage tr={tr}/></div>
-        )}
-
-        {/* ── HOME PAGE ── */}
         {currentPage === "home" && (<>
-
-          {/* Hero */}
           <section className="hero">
             <div className="hero-eyebrow">
               <Zap size={11} strokeWidth={2.5}/>
@@ -1176,30 +1085,22 @@ export default function Home() {
             <h1 className="hero-h1">
               {tr.hero_title_1}{" "}
               <span className="accent">{tr.hero_title_accent}</span>
-              <br/>
-              {tr.hero_title_2}
+              <br/>{tr.hero_title_2}
             </h1>
             <p className="hero-sub">{tr.hero_sub}</p>
             <div className="hero-actions">
               <button className="btn-primary"
                 onClick={() => document.getElementById("optimizer-start")?.scrollIntoView({ behavior:"smooth" })}
                 style={{ display:"flex", alignItems:"center", gap:7 }}>
-                {tr.hero_cta}
-                <ArrowRight size={15}/>
+                {tr.hero_cta}<ArrowRight size={15}/>
               </button>
               <button className="btn-secondary" onClick={() => setCurrentPage("docs")}
                 style={{ display:"flex", alignItems:"center", gap:7 }}>
-                <BookOpen size={14}/>
-                {tr.hero_docs}
+                <BookOpen size={14}/>{tr.hero_docs}
               </button>
             </div>
             <div className="hero-stats">
-              {[
-                ["100%", tr.hero_stat_1],
-                ["0 MB", tr.hero_stat_2],
-                ["SHA-1", tr.hero_stat_3],
-                ["FREE", tr.hero_stat_4],
-              ].map(([v, l]) => (
+              {[["100%",tr.hero_stat_1],["0 MB",tr.hero_stat_2],["SHA-1",tr.hero_stat_3],["FREE",tr.hero_stat_4]].map(([v,l]) => (
                 <div className="hero-stat" key={l}>
                   <span className="hero-stat-val">{v}</span>
                   <span className="hero-stat-lbl">{l}</span>
@@ -1208,89 +1109,61 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Feature Strip */}
-<div className="feature-strip">
+          <div className="feature-strip">
             <div className="feature-track">
               {[...FEATURE_ITEMS, ...FEATURE_ITEMS].map(({ icon: Icon, title, desc }, i) => (
                 <div className="feature-card" key={`${title}-${i}`}>
-                  <div className="feature-card-icon">
-                    <Icon size={15} strokeWidth={1.75}/>
-                  </div>
+                  <div className="feature-card-icon"><Icon size={15} strokeWidth={1.75}/></div>
                   <div className="feature-card-title">{title}</div>
                   <div className="feature-card-desc">{desc}</div>
                 </div>
               ))}
             </div>
           </div>
-          {/* ── OPTIMIZER ── */}
+
           <div className="optimizer-wrap" id="optimizer-start">
 
-            {/* 1. Upload */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">01</div>
-                <div>
-                  <div className="sec-title">{tr.sec_upload_title}</div>
-                  <div className="sec-sub">{tr.sec_upload_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_upload_title}</div><div className="sec-sub">{tr.sec_upload_sub}</div></div>
               </div>
               <input type="file" accept=".zip" id="inputFile" className="hidden-input"
-                disabled={isProcessing || isAnalyzing}
-                onChange={e => handleFile(e.target.files?.[0])}/>
-              <label htmlFor="inputFile"
-                className={`dropzone${isDragOver?" drag-over":""}${file?" has-file":""}`}
+                disabled={isProcessing || isAnalyzing} onChange={e => handleFile(e.target.files?.[0])}/>
+              <label htmlFor="inputFile" className={`dropzone${isDragOver?" drag-over":""}${file?" has-file":""}`}
                 onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
                 <div className="drop-icon">
                   {file ? <Package size={18} strokeWidth={1.5}/> : <Upload size={18} strokeWidth={1.5}/>}
                 </div>
                 {file ? (
-                  <>
-                    <div className="drop-filename">{fileName}</div>
-                    <div className="drop-sub">{(file.size/1e6).toFixed(2)} MB · Klik untuk ganti</div>
-                  </>
+                  <><div className="drop-filename">{fileName}</div><div className="drop-sub">{(file.size/1e6).toFixed(2)} MB · Klik untuk ganti</div></>
                 ) : (
-                  <>
-                    <div className="drop-title">{tr.sec_upload_drop_title}</div>
-                    <div className="drop-sub">{tr.sec_upload_drop_sub}</div>
-                  </>
+                  <><div className="drop-title">{tr.sec_upload_drop_title}</div><div className="drop-sub">{tr.sec_upload_drop_sub}</div></>
                 )}
               </label>
             </div>
 
-            {/* 2. Preset */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">02</div>
-                <div>
-                  <div className="sec-title">{tr.sec_preset_title}</div>
-                  <div className="sec-sub">{tr.sec_preset_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_preset_title}</div><div className="sec-sub">{tr.sec_preset_sub}</div></div>
               </div>
               <div className="pill-row">
                 {Object.entries(DEFAULT_PRESETS).map(([key, p]) => (
-                  <button key={key} className="pill" disabled={isProcessing||isAnalyzing}
-                    onClick={() => applyPreset(key)}>
-                    {p.label}
-                  </button>
+                  <button key={key} className="pill" disabled={isProcessing||isAnalyzing} onClick={() => applyPreset(key)}>{p.label}</button>
                 ))}
               </div>
             </div>
 
-            {/* 3. Mode */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">03</div>
-                <div>
-                  <div className="sec-title">{tr.sec_mode_title}</div>
-                  <div className="sec-sub">{tr.sec_mode_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_mode_title}</div><div className="sec-sub">{tr.sec_mode_sub}</div></div>
               </div>
               <div className="mode-grid">
                 {Object.values(MODES).map(m => (
-                  <button key={m.id}
-                    className={`mode-card${mode===m.id?" active":""}`}
-                    disabled={isProcessing||isAnalyzing}
-                    onClick={() => setMode(m.id)}>
+                  <button key={m.id} className={`mode-card${mode===m.id?" active":""}`}
+                    disabled={isProcessing||isAnalyzing} onClick={() => setMode(m.id)}>
                     <div className="mode-card-head">
                       <div className="mode-card-icon">
                         <Layers size={13} strokeWidth={1.75}/>
@@ -1310,14 +1183,10 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 4. Resolution */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">04</div>
-                <div>
-                  <div className="sec-title">{tr.sec_resolution_title}</div>
-                  <div className="sec-sub">{tr.sec_resolution_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_resolution_title}</div><div className="sec-sub">{tr.sec_resolution_sub}</div></div>
               </div>
               <div className="slider-row">
                 <input type="range" min="40" max="120" value={resolutionPercent}
@@ -1328,20 +1197,15 @@ export default function Home() {
               </div>
               <div className="pill-row">
                 {[40,60,80,100,120].map(v => (
-                  <button key={v} className="pill" disabled={isProcessing||isAnalyzing}
-                    onClick={() => setResolutionPercent(v)}>{v}%</button>
+                  <button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={() => setResolutionPercent(v)}>{v}%</button>
                 ))}
               </div>
             </div>
 
-            {/* 5. Options */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">05</div>
-                <div>
-                  <div className="sec-title">{tr.sec_options_title}</div>
-                  <div className="sec-sub">{tr.sec_options_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_options_title}</div><div className="sec-sub">{tr.sec_options_sub}</div></div>
               </div>
               <div className="check-grid">
                 <CheckItem checked={preservePixelArt} onChange={setPreservePixelArt} disabled={isProcessing||isAnalyzing} label={tr.opt_pixelart} desc={tr.opt_pixelart_desc}/>
@@ -1356,7 +1220,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 6. Advanced */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">06</div>
@@ -1364,8 +1227,7 @@ export default function Home() {
               </div>
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:12, fontWeight:600, marginBottom:10, color:"var(--text-secondary)", display:"flex", alignItems:"center", gap:6 }}>
-                  <HardDrive size={13} style={{ color:"var(--text-tertiary)" }}/>
-                  {tr.zip_level}
+                  <HardDrive size={13} style={{ color:"var(--text-tertiary)" }}/>{tr.zip_level}
                 </div>
                 <div className="slider-row">
                   <input type="range" min="1" max="9" value={zipCompressionLevel}
@@ -1377,30 +1239,23 @@ export default function Home() {
               </div>
               <div>
                 <div style={{ fontSize:12, fontWeight:600, marginBottom:10, color:"var(--text-secondary)", display:"flex", alignItems:"center", gap:6 }}>
-                  <Cpu size={13} style={{ color:"var(--text-tertiary)" }}/>
-                  Web Workers
+                  <Cpu size={13} style={{ color:"var(--text-tertiary)" }}/>Web Workers
                 </div>
                 <div className="pill-row">
                   <button className="pill" disabled={isProcessing||isAnalyzing} onClick={() => setWorkerCount(0)}>
                     {tr.workers_auto} ({computedWorkerCount})
                   </button>
                   {[2,3,4].map(v => (
-                    <button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={() => setWorkerCount(v)}>
-                      {v} Workers
-                    </button>
+                    <button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={() => setWorkerCount(v)}>{v} Workers</button>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* 7. Icon */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">07</div>
-                <div>
-                  <div className="sec-title">{tr.sec_icon_title}</div>
-                  <div className="sec-sub">{tr.sec_icon_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_icon_title}</div><div className="sec-sub">{tr.sec_icon_sub}</div></div>
               </div>
               <input type="file" accept="image/png,image/jpeg,image/jpg" id="iconFile" className="hidden-input"
                 disabled={isProcessing||isAnalyzing}
@@ -1409,9 +1264,7 @@ export default function Home() {
                   if (f) { setIconFile(f); const ab = await f.arrayBuffer(); setIconBuffer(ab); appendLog(`Icon: ${f.name}`); }
                 }}/>
               <label htmlFor="iconFile" className={`upload-btn${iconFile?" has-file":""}`}>
-                <div className="upload-btn-icon">
-                  <FileImage size={16} strokeWidth={1.75}/>
-                </div>
+                <div className="upload-btn-icon"><FileImage size={16} strokeWidth={1.75}/></div>
                 <div>
                   <div className="upload-btn-text">{iconFile ? iconFile.name : tr.icon_placeholder}</div>
                   <div className="upload-btn-sub">{tr.icon_sub}</div>
@@ -1419,14 +1272,10 @@ export default function Home() {
               </label>
             </div>
 
-            {/* 8. mcmeta */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">08</div>
-                <div>
-                  <div className="sec-title">{tr.sec_mcmeta_title}</div>
-                  <div className="sec-sub">{tr.sec_mcmeta_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_mcmeta_title}</div><div className="sec-sub">{tr.sec_mcmeta_sub}</div></div>
               </div>
               {mcmetaError && (
                 <div style={{ color:"var(--err)", fontSize:12, marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
@@ -1442,14 +1291,10 @@ export default function Home() {
               )}
             </div>
 
-            {/* 9. Pojav Log */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">09</div>
-                <div>
-                  <div className="sec-title">{tr.sec_pojav_title}</div>
-                  <div className="sec-sub">{tr.sec_pojav_sub}</div>
-                </div>
+                <div><div className="sec-title">{tr.sec_pojav_title}</div><div className="sec-sub">{tr.sec_pojav_sub}</div></div>
               </div>
               <input type="file" accept=".txt" id="logFile" className="hidden-input"
                 disabled={isProcessing||isAnalyzing}
@@ -1459,9 +1304,7 @@ export default function Home() {
                   if (parsed.enforceStrip.length > 0) {
                     appendLog(`Auto-Fix: ${parsed.enforceStrip.length} path animated strip bermasalah → enforce resize.`);
                     setDynamicStripPaths(prev => uniqueLower([...prev, ...parsed.enforceStrip]));
-                  } else {
-                    appendLog("Auto-Fix: tidak ada animated strip bermasalah di log.");
-                  }
+                  } else appendLog("Auto-Fix: tidak ada animated strip bermasalah di log.");
                   if (parsed.hasResourceReloadFailed) {
                     appendLog("RESOURCE RELOAD FAILED terdeteksi di log!");
                     parsed.crashCauses.forEach(c => appendLog(`  → ${c}`));
@@ -1478,37 +1321,23 @@ export default function Home() {
                     appendLog(`Sound Error: ${parsed.soundErrors.length} unknown soundEvent.`);
                     parsed.soundErrors.slice(0,5).forEach(s => appendLog(`  • ${s}`));
                   }
-                  if (parsed.missing.length > 0) {
-                    appendLog(`Missing texture/sprite: ${parsed.missing.length} file tidak ditemukan.`);
-                  }
-                  if (parsed.atlasErrors.length > 0) {
-                    appendLog(`Atlas Error: ${parsed.atlasErrors.length} texture tidak muat.`);
-                  }
-                  if (parsed.modelErrors.length > 0) {
-                    appendLog(`Missing Model: ${parsed.modelErrors.length} model tidak ditemukan.`);
-                  }
-                  if (parsed.totalIssues === 0 && !parsed.hasResourceReloadFailed) {
-                    appendLog("Log dianalisis — tidak ada masalah resource pack terdeteksi.");
-                  } else {
-                    appendLog(`Total: ${parsed.totalIssues} masalah terdeteksi dari log.`);
-                  }
+                  if (parsed.missing.length > 0) appendLog(`Missing texture/sprite: ${parsed.missing.length} file tidak ditemukan.`);
+                  if (parsed.atlasErrors.length > 0) appendLog(`Atlas Error: ${parsed.atlasErrors.length} texture tidak muat.`);
+                  if (parsed.modelErrors.length > 0) appendLog(`Missing Model: ${parsed.modelErrors.length} model tidak ditemukan.`);
+                  if (parsed.totalIssues === 0 && !parsed.hasResourceReloadFailed) appendLog("Log dianalisis — tidak ada masalah resource pack terdeteksi.");
+                  else appendLog(`Total: ${parsed.totalIssues} masalah terdeteksi dari log.`);
                 }}/>
               <label htmlFor="logFile" className="upload-btn">
-                <div className="upload-btn-icon">
-                  <FileText size={16} strokeWidth={1.75}/>
-                </div>
+                <div className="upload-btn-icon"><FileText size={16} strokeWidth={1.75}/></div>
                 <div>
                   <div className="upload-btn-text">{tr.pojav_placeholder}</div>
                   <div className="upload-btn-sub">
-                    Detected:{" "}
-                    <strong style={{ color:"var(--ok)", fontFamily:"var(--f-mono)" }}>{dynamicStripPaths.length}</strong>
-                    {" "}{tr.pojav_detected}
+                    Detected: <strong style={{ color:"var(--ok)", fontFamily:"var(--f-mono)" }}>{dynamicStripPaths.length}</strong> {tr.pojav_detected}
                   </div>
                 </div>
               </label>
             </div>
 
-            {/* 10. Progress */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">10</div>
@@ -1518,7 +1347,6 @@ export default function Home() {
                 etaSec={progress.etaSec} beating={isProcessing} waitingText={tr.progress_waiting}/>
             </div>
 
-            {/* 11. Console */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num">11</div>
@@ -1554,7 +1382,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Analyzer Result */}
             {analyzerResult && (
               <div className="glass-section fade-in">
                 <div className="sec-header">
@@ -1570,7 +1397,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Summary */}
             {summary && (
               <div className="glass-section fade-in">
                 <div className="sec-header">
@@ -1627,7 +1453,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Badge Generator */}
             <div className="glass-section">
               <div className="sec-header">
                 <div className="sec-num" style={{ background:"rgba(139,92,246,0.12)", borderColor:"rgba(139,92,246,0.25)", color:"rgba(167,139,250,1)" }}>
@@ -1641,14 +1466,11 @@ export default function Home() {
               <BadgeGenerator/>
             </div>
 
-          </div>{/* /optimizer-wrap */}
+          </div>
 
-          {/* Sticky buttons */}
           <div className="sticky-btn-wrap">
             <div className="sticky-btn-inner">
-              <button
-                className="btn-analyze"
-                onClick={handleAnalyze}
+              <button className="btn-analyze" onClick={handleAnalyze}
                 disabled={isProcessing || isAnalyzing || !file}
                 style={{ display:"flex", alignItems:"center", gap:6,
                   background:isAnalyzing?"var(--info-dim)":"var(--glass-base)",
@@ -1657,11 +1479,8 @@ export default function Home() {
                 <ScanSearch size={15} style={{ animation:isAnalyzing?"spin 1.5s linear infinite":"none" }}/>
                 {isAnalyzing ? "Scanning..." : "Analyze"}
               </button>
-              <button
-                className={`btn-optimize${isProcessing?" processing":""}`}
-                style={{ flex:1 }}
-                onClick={handleOptimize}
-                disabled={isProcessing || isAnalyzing || !file}>
+              <button className={`btn-optimize${isProcessing?" processing":""}`} style={{ flex:1 }}
+                onClick={handleOptimize} disabled={isProcessing || isAnalyzing || !file}>
                 {isProcessing ? (
                   <><RefreshCw size={15} style={{ animation:"spin 1s linear infinite" }}/>{tr.btn_optimizing} {progressPct}%</>
                 ) : !file ? (
@@ -1673,7 +1492,6 @@ export default function Home() {
             </div>
           </div>
 
-{/* Support */}
           <div className="support-section">
             <div className="support-inner">
               <div className="support-icon">
@@ -1691,9 +1509,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Footer */}
-          <footer className="footer">
-          {/* Footer */}
           <footer className="footer">
             <div className="footer-logo">
               <Zap size={15} strokeWidth={2}/>
@@ -1726,13 +1541,9 @@ export default function Home() {
 
       </div>
 
-      <style jsx global>{`
+      <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </>
   );
-}
-
-export async function getServerSideProps() {
-  return { props: {} };
 }
