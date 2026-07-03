@@ -34,15 +34,15 @@ const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(Kh
 
 const MODES = {
   normal:  { id:"normal",  label:"Normal",       description:"Seimbang, kualitas bagus dan pack tetap ringan.", scale:0.85, maxSize:512, minSize:16, minifyJson:true },
-  extreme: { id:"extreme", label:"Extreme",       description:"Sangat hemat, cocok untuk device mid–low.",      scale:0.6,  maxSize:256, minSize:8,  minifyJson:true },
-  ultra:   { id:"ultra",   label:"Ultra Extreme", description:"Paling ringan, untuk HP kentang / Pojav lemah.", scale:0.4,  maxSize:128, minSize:4,  minifyJson:true },
+  extreme: { id:"extreme", label:"Extreme",       description:"Sangat hemat, cocok untuk device mid–low.",      scale:0.55, maxSize:128, minSize:8,  minifyJson:true },
+  ultra:   { id:"ultra",   label:"Ultra Extreme", description:"Paling ringan, untuk HP kentang / Pojav lemah.", scale:0.35, maxSize:64,  minSize:4,  minifyJson:true },
 };
 
 const DEFAULT_PRESETS = {
-  "pojav-lite":    { label:"Pojav Lite",     mode:"ultra",   resolutionPercent:60,  zipCompressionLevel:9, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true },
-  "server-pack":   { label:"Server Pack",    mode:"extreme", resolutionPercent:80,  zipCompressionLevel:8, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:false, doJsonKeySort:true,  doLangMinify:true },
-  "ultra-compress":{ label:"Ultra Compress", mode:"ultra",   resolutionPercent:50,  zipCompressionLevel:9, preservePixelArt:false, optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true },
-  "quality":       { label:"Quality",        mode:"normal",  resolutionPercent:100, zipCompressionLevel:6, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:false,doDeepCleanJson:true, doShaderMinify:false, doPowerOfTwo:false, doJsonKeySort:false, doLangMinify:true },
+  "pojav-lite":    { label:"Pojav Lite",     mode:"ultra",   resolutionPercent:60,  zipCompressionLevel:9, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true, doStripMeta:true },
+  "server-pack":   { label:"Server Pack",    mode:"extreme", resolutionPercent:80,  zipCompressionLevel:8, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:false, doJsonKeySort:true,  doLangMinify:true, doStripMeta:true },
+  "ultra-compress":{ label:"Ultra Compress", mode:"ultra",   resolutionPercent:50,  zipCompressionLevel:9, preservePixelArt:false, optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true, doStripMeta:true },
+  "quality":       { label:"Quality",        mode:"normal",  resolutionPercent:100, zipCompressionLevel:6, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:false,doDeepCleanJson:true, doShaderMinify:false, doPowerOfTwo:false, doJsonKeySort:false, doLangMinify:true, doStripMeta:true },
 };
 
 const BASE_POLICIES = [
@@ -364,11 +364,43 @@ function createWorkerPool(count) {
     function cleanAlpha(d){let n=0;for(let i=0;i<d.length;i+=4){if(d[i+3]===0&&(d[i]||d[i+1]||d[i+2])){d[i]=d[i+1]=d[i+2]=0;n++;}}return n;}
     function isSingleColor(d){if(d.length<4)return false;const r=d[0],g=d[1],b=d[2],a=d[3];for(let i=4;i<d.length;i+=4){if(d[i]!==r||d[i+1]!==g||d[i+2]!==b||d[i+3]!==a)return false;}return true;}
     function nearestPow2(n){if(n<=0)return 1;let p=1;while(p<n)p<<=1;const l=p>>1;return(n-l<p-n)?l:p;}
+    const KEEP_CHUNKS = new Set(["IHDR","PLTE","tRNS","IDAT","IEND","acTL","fcTL","fdAT"]);
+    function stripPngMetadata(buf){
+      try{
+        const u8=new Uint8Array(buf);
+        if(u8.length<8) return {out:buf,stripped:0};
+        const sig=[137,80,78,71,13,10,26,10];
+        for(let i=0;i<8;i++) if(u8[i]!==sig[i]) return {out:buf,stripped:0};
+        const out=[137,80,78,71,13,10,26,10];
+        let pos=8, stripped=0;
+        while(pos+8<=u8.length){
+          const len=(u8[pos]<<24|u8[pos+1]<<16|u8[pos+2]<<8|u8[pos+3])>>>0;
+          const type=String.fromCharCode(u8[pos+4],u8[pos+5],u8[pos+6],u8[pos+7]);
+          const chunkTotal=8+len+4;
+          if(pos+chunkTotal>u8.length) break;
+          if(KEEP_CHUNKS.has(type)){
+            for(let i=0;i<chunkTotal;i++) out.push(u8[pos+i]);
+          } else {
+            stripped+=chunkTotal;
+          }
+          pos+=chunkTotal;
+          if(type==="IEND") break;
+        }
+        if(stripped===0) return {out:buf,stripped:0};
+        return {out:new Uint8Array(out).buffer,stripped};
+      }catch{ return {out:buf,stripped:0}; }
+    }
     self.onmessage=async({data:p})=>{
-      const{id,buffer,w0,h0,tW,tH,smoothing,sizeGuard,doAlphaClean,doSingleColor,doPowerOfTwo}=p;
+      const{id,buffer,w0,h0,tW,tH,smoothing,sizeGuard,doAlphaClean,doSingleColor,doPowerOfTwo,doStripMeta}=p;
       try{
         if(!buffer){self.postMessage({id,ok:true,out:buffer,changed:false});return;}
-        const blob=new Blob([buffer],{type:"image/png"});
+        let metaStripped=0;
+        let workBuffer=buffer;
+        if(doStripMeta){
+          const r=stripPngMetadata(buffer);
+          workBuffer=r.out; metaStripped=r.stripped;
+        }
+        const blob=new Blob([workBuffer],{type:"image/png"});
         const bmp=await createImageBitmap(blob);
         let finalW=tW,finalH=tH;
         if(doPowerOfTwo){finalW=nearestPow2(tW);finalH=nearestPow2(tH);}
@@ -385,7 +417,7 @@ function createWorkerPool(count) {
           sc2.putImageData(new ImageData(new Uint8ClampedArray([id2.data[0],id2.data[1],id2.data[2],id2.data[3]]),1,1),0,0);
           const sb=await sc.convertToBlob({type:"image/png"});
           const sbuf=await sb.arrayBuffer();
-          self.postMessage({id,ok:true,out:sbuf,changed:true,singleColor:true},[sbuf]);return;
+          self.postMessage({id,ok:true,out:sbuf,changed:true,singleColor:true,metaStripped},[sbuf]);return;
         }
         let alphaFixed=0;
         if(doAlphaClean) alphaFixed=cleanAlpha(id2.data);
@@ -393,9 +425,9 @@ function createWorkerPool(count) {
         const outBlob=await oc.convertToBlob({type:"image/png"});
         const out=await outBlob.arrayBuffer();
         const orig=buffer.byteLength||buffer.length||0;
-        const changed=finalW!==w0||finalH!==h0||alphaFixed>0;
+        const changed=finalW!==w0||finalH!==h0||alphaFixed>0||metaStripped>0;
         if(sizeGuard&&!changed&&out.byteLength>=orig){self.postMessage({id,ok:true,out:buffer,changed:false,guarded:true},[buffer]);return;}
-        self.postMessage({id,ok:true,out,changed,alphaFixed,finalW,finalH},[out]);
+        self.postMessage({id,ok:true,out,changed,alphaFixed,finalW,finalH,metaStripped},[out]);
       }catch(e){self.postMessage({id,ok:false,error:e.message});}
     };
   `;
@@ -779,6 +811,7 @@ export default function Home() {
   const [doPowerOfTwo, setDoPowerOfTwo] = useState(false);
   const [doJsonKeySort, setDoJsonKeySort] = useState(true);
   const [doLangMinify, setDoLangMinify] = useState(true);
+  const [doStripMeta, setDoStripMeta] = useState(true);
 
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -841,6 +874,7 @@ export default function Home() {
     setDoDeepCleanJson(p.doDeepCleanJson); setDoShaderMinify(p.doShaderMinify);
     setDoPowerOfTwo(p.doPowerOfTwo); setDoJsonKeySort(p.doJsonKeySort);
     setDoLangMinify(p.doLangMinify);
+    setDoStripMeta(p.doStripMeta ?? true);
     appendLog(`Preset "${p.label}" diterapkan.`);
   }, [appendLog]);
 
@@ -901,7 +935,7 @@ export default function Home() {
       appendLog("ZIP berhasil dibaca.");
       const outZip = new JSZip();
       const entries = Object.values(zip.files);
-      const stats = { totalFiles:0, pngCount:0, pngOptimized:0, pngSkippedByIHDR:0, pngSingleColor:0, pngAlphaCleaned:0, pngPowerOfTwo:0, jsonCount:0, jsonMinified:0, jsonDeepCleaned:0, jsonKeySorted:0, removed:0, oggCount:0, oggOptimized:0, shaderCount:0, shaderMinified:0, langCount:0, bbmodelCount:0, oversizedWarnings:0 };
+      const stats = { totalFiles:0, pngCount:0, pngOptimized:0, pngSkippedByIHDR:0, pngSingleColor:0, pngAlphaCleaned:0, pngPowerOfTwo:0, pngMetaStrippedBytes:0, jsonCount:0, jsonMinified:0, jsonDeepCleaned:0, jsonKeySorted:0, removed:0, oggCount:0, oggOptimized:0, shaderCount:0, shaderMinified:0, langCount:0, bbmodelCount:0, oversizedWarnings:0 };
       const totalToProcess = entries.filter(e => !e.dir).length;
       setProgress({ done:0, total:totalToProcess, etaSec:null });
       let done = 0;
@@ -977,7 +1011,8 @@ export default function Home() {
           const { w:w0, h:h0 } = sz;
           if (w0>1024 || h0>1024) { stats.oversizedWarnings++; appendLog(`Oversized: ${name} (${w0}×${h0})`); }
           const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
-          const res = await pool.runPngJob({ buffer:buf, w0, h0, tW, tH, smoothing, sizeGuard:true, doAlphaClean, doSingleColor, doPowerOfTwo });
+          const res = await pool.runPngJob({ buffer:buf, w0, h0, tW, tH, smoothing, sizeGuard:true, doAlphaClean, doSingleColor, doPowerOfTwo, doStripMeta });
+          if (res?.metaStripped > 0) stats.pngMetaStrippedBytes = (stats.pngMetaStrippedBytes||0) + res.metaStripped;
           if (res?.singleColor) { stats.pngSingleColor++; stats.pngOptimized++; appendLog(`1×1: ${name}`); }
           else if (res?.changed) {
             stats.pngOptimized++;
@@ -985,6 +1020,7 @@ export default function Home() {
             if (doPowerOfTwo && res.finalW && (res.finalW!==w0||res.finalH!==h0)) stats.pngPowerOfTwo++;
             if (tW!==w0||tH!==h0) appendLog(`PNG: ${name} (${w0}×${h0}→${res.finalW||tW}×${res.finalH||tH})`);
             else if (res.alphaFixed>0) appendLog(`Alpha: ${name}`);
+            else if (res.metaStripped>0) appendLog(`Metadata stripped: ${name} (-${res.metaStripped}B)`);
           }
           outZip.file(name, res?.out || buf); tick(); continue;
         }
@@ -1217,6 +1253,7 @@ export default function Home() {
                 <CheckItem checked={doPowerOfTwo} onChange={setDoPowerOfTwo} disabled={isProcessing||isAnalyzing} label={tr.opt_pow2} desc={tr.opt_pow2_desc}/>
                 <CheckItem checked={doJsonKeySort} onChange={setDoJsonKeySort} disabled={isProcessing||isAnalyzing} label={tr.opt_jsonsort} desc={tr.opt_jsonsort_desc}/>
                 <CheckItem checked={doLangMinify} onChange={setDoLangMinify} disabled={isProcessing||isAnalyzing} label={tr.opt_lang} desc={tr.opt_lang_desc}/>
+                <CheckItem checked={doStripMeta} onChange={setDoStripMeta} disabled={isProcessing||isAnalyzing} label="PNG Metadata Strip" desc="Hapus chunk tersembunyi (tEXt, iCCP, gAMA, dll) dari PNG, tanpa efek visual"/>
               </div>
             </div>
 
@@ -1422,6 +1459,7 @@ export default function Home() {
                   {summary.pngSingleColor>0&&<SummaryCard label={tr.sum_single} value={summary.pngSingleColor}/>}
                   {summary.pngAlphaCleaned>0&&<SummaryCard label={tr.sum_alpha} value={summary.pngAlphaCleaned}/>}
                   {summary.pngPowerOfTwo>0&&<SummaryCard label={tr.sum_pow2} value={summary.pngPowerOfTwo}/>}
+                  {summary.pngMetaStrippedBytes>0&&<SummaryCard label="Metadata Stripped" value={summary.pngMetaStrippedBytes>1e6?`${(summary.pngMetaStrippedBytes/1e6).toFixed(2)}MB`:`${(summary.pngMetaStrippedBytes/1e3).toFixed(1)}KB`}/>}
                   {summary.oggCount>0&&<SummaryCard label={tr.sum_ogg} value={`${summary.oggOptimized}/${summary.oggCount}`}/>}
                   <SummaryCard label={tr.sum_json} value={`${summary.jsonMinified}/${summary.jsonCount}`}/>
                   {summary.jsonDeepCleaned>0&&<SummaryCard label={tr.sum_deep} value={summary.jsonDeepCleaned}/>}
