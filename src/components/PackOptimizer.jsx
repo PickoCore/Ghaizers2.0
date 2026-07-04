@@ -371,15 +371,15 @@ function createWorkerPool(count) {
         if(u8.length<8) return {out:buf,stripped:0};
         const sig=[137,80,78,71,13,10,26,10];
         for(let i=0;i<8;i++) if(u8[i]!==sig[i]) return {out:buf,stripped:0};
-        const out=[137,80,78,71,13,10,26,10];
         let pos=8, stripped=0;
+        const keepRanges=[[0,8]];
         while(pos+8<=u8.length){
           const len=(u8[pos]<<24|u8[pos+1]<<16|u8[pos+2]<<8|u8[pos+3])>>>0;
           const type=String.fromCharCode(u8[pos+4],u8[pos+5],u8[pos+6],u8[pos+7]);
           const chunkTotal=8+len+4;
-          if(pos+chunkTotal>u8.length) break;
+          if(len<0||pos+chunkTotal>u8.length) break;
           if(KEEP_CHUNKS.has(type)){
-            for(let i=0;i<chunkTotal;i++) out.push(u8[pos+i]);
+            keepRanges.push([pos,pos+chunkTotal]);
           } else {
             stripped+=chunkTotal;
           }
@@ -387,7 +387,12 @@ function createWorkerPool(count) {
           if(type==="IEND") break;
         }
         if(stripped===0) return {out:buf,stripped:0};
-        return {out:new Uint8Array(out).buffer,stripped};
+        let totalLen=0;
+        for(const [s,e] of keepRanges) totalLen+=(e-s);
+        const result=new Uint8Array(totalLen);
+        let offset=0;
+        for(const [s,e] of keepRanges){ result.set(u8.subarray(s,e),offset); offset+=(e-s); }
+        return {out:result.buffer,stripped};
       }catch{ return {out:buf,stripped:0}; }
     }
     self.onmessage=async({data:p})=>{
@@ -948,6 +953,7 @@ export default function Home() {
       };
 
       for (const entry of entries) {
+        try {
         if (entry.dir) { outZip.folder(entry.name); continue; }
         const name = entry.name, lower = name.toLowerCase();
         stats.totalFiles++;
@@ -1038,6 +1044,11 @@ export default function Home() {
           tick(); continue;
         }
         outZip.file(name, await entry.async("arraybuffer")); tick();
+        } catch (fileErr) {
+          stats.removed++;
+          appendLog(`SKIP (corrupt/error): ${entry.name} — ${fileErr.message}`);
+          tick();
+        }
       }
 
       outZip.file("GHAIZERS_CREDIT.txt", CREDIT_TXT);
