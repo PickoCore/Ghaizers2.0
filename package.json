@@ -1,6 +1,6 @@
 {
   "name": "ghaizers2.0-astro",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test:png": "node scripts/test-png.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^3.6.0",

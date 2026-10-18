@@ -5,7 +5,15 @@ Migrasi dari Next.js ke **Astro.js**. Halaman utama dirender sebagai HTML statis
 di browser sebagai **React island** (`client:load`) — jadi cepat di-crawl
 Google *dan* tetap 100% client-side processing seperti sebelumnya.
 
-## Apa yang berubah
+## v2.2 — Fix ukuran naik + sistem PNG baru
+- 🐞 **Fix utama**: ukuran pack naik setelah optimize. Penyebabnya encoder PNG canvas browser (tanpa palette & filter optimal) + hasilnya tetap dipakai walau lebih besar. Sekarang pakai encoder lossless sendiri (`src/lib/png.js`) + **Size Guard** per file.
+- 🐞 Texture kecil tidak lagi di-upscale oleh `minSize`; atlas non-strip (modelengine) tidak lagi digepengkan `enforceStrip`.
+- 🐞 File tidak lagi hilang dari ZIP saat worker gagal; worker kini benar-benar paralel.
+- ✨ Smart PNG Encoder (palette 1/2/4/8-bit, color type minimum, adaptive filter), mode & preset **Lossless Safe**, **Palette Quantize** opsional, ringkasan baru (Top penghematan, Download lagi, peringatan jika hasil tidak lebih kecil).
+- 🧪 Tes engine: `npm run test:png`
+- ⚠️ Belum dijalankan `npm install`/`astro build` di sandbox (offline) — jalankan `npm run dev` & `npm run build` dulu sebelum deploy.
+
+## Apa yang berubah (migrasi Astro)
 - ✅ Framework: Next.js → **Astro 4** (output HTML default = 0 JS kecuali komponen interaktif)
 - ✅ SEO: meta title/description per halaman, Open Graph, Twitter Card, canonical, hreflang, `robots` meta
 - ✅ Structured data (JSON-LD): `WebApplication`, `Organization`, `FAQPage`

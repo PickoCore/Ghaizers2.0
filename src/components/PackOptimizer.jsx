@@ -33,15 +33,17 @@ Lapor: github.com/KhaizenNomazen
 const CREDIT_MCMETA_DESC = "§cDilarang Dijual! §r| Optimizer by §aghaa §7(KhaizenNomazen) | §eGRATIS di optimizer.ghaa.my.id";
 
 const MODES = {
+  lossless:{ id:"lossless", label:"Lossless",      description:"Resolusi tetap 100%, kualitas identik. Hanya kompresi ulang — dijamin tidak membesar.", scale:1.0, maxSize:8192, minSize:1, minifyJson:true },
   normal:  { id:"normal",  label:"Normal",       description:"Seimbang, kualitas bagus dan pack tetap ringan.", scale:0.85, maxSize:512, minSize:16, minifyJson:true },
   extreme: { id:"extreme", label:"Extreme",       description:"Sangat hemat, cocok untuk device mid–low.",      scale:0.55, maxSize:128, minSize:8,  minifyJson:true },
   ultra:   { id:"ultra",   label:"Ultra Extreme", description:"Paling ringan, untuk HP kentang / Pojav lemah.", scale:0.35, maxSize:64,  minSize:4,  minifyJson:true },
 };
 
 const DEFAULT_PRESETS = {
-  "pojav-lite":    { label:"Pojav Lite",     mode:"ultra",   resolutionPercent:60,  zipCompressionLevel:9, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true, doStripMeta:true },
+  "lossless":      { label:"Lossless Safe",  mode:"lossless",resolutionPercent:100, zipCompressionLevel:9, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:false,doDeepCleanJson:true, doShaderMinify:false, doPowerOfTwo:false, doJsonKeySort:false, doLangMinify:true, doStripMeta:true, doQuantize:false },
+  "pojav-lite":    { label:"Pojav Lite",     mode:"ultra",   resolutionPercent:60,  zipCompressionLevel:9, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true, doStripMeta:true, doQuantize:false },
   "server-pack":   { label:"Server Pack",    mode:"extreme", resolutionPercent:80,  zipCompressionLevel:8, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:false, doJsonKeySort:true,  doLangMinify:true, doStripMeta:true },
-  "ultra-compress":{ label:"Ultra Compress", mode:"ultra",   resolutionPercent:50,  zipCompressionLevel:9, preservePixelArt:false, optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true, doStripMeta:true },
+  "ultra-compress":{ label:"Ultra Compress", mode:"ultra",   resolutionPercent:50,  zipCompressionLevel:9, preservePixelArt:false, optimizeOgg:true, doAlphaClean:true, doSingleColor:true, doDeepCleanJson:true, doShaderMinify:true,  doPowerOfTwo:true,  doJsonKeySort:true,  doLangMinify:true, doStripMeta:true, doQuantize:true },
   "quality":       { label:"Quality",        mode:"normal",  resolutionPercent:100, zipCompressionLevel:6, preservePixelArt:true,  optimizeOgg:true, doAlphaClean:true, doSingleColor:false,doDeepCleanJson:true, doShaderMinify:false, doPowerOfTwo:false, doJsonKeySort:false, doLangMinify:true, doStripMeta:true },
 };
 
@@ -353,91 +355,20 @@ function computeTargetSize({ w0, h0, policy, modeConfig }) {
   const effScale = (policy.scaleMul || 1.0) * modeConfig.scale;
   const minSz = policy.minSize || modeConfig.minSize || 16;
   const maxSz = policy.maxSize || modeConfig.maxSize || 512;
-  let tW = Math.max(minSz, Math.min(maxSz, Math.round(w0 * effScale)));
-  let tH = Math.max(minSz, Math.min(maxSz, Math.round(frameH * effScale))) * frames;
-  if (policy.enforceStrip) tH = Math.round(tW * frames);
+  // FIX: texture TIDAK PERNAH di-upscale. Sebelumnya minSize (mis. 16) bisa memperbesar
+  // texture kecil (mis. 4×4 → 16×16) sehingga ukuran file malah naik.
+  const tW = Math.min(w0, Math.max(minSz, Math.min(maxSz, Math.round(w0 * effScale))));
+  const fH = Math.min(frameH, Math.max(minSz, Math.min(maxSz, Math.round(frameH * effScale))));
+  let tH = fH * frames;
+  // FIX: enforceStrip hanya untuk strip animasi asli (frames > 1). Sebelumnya texture non-strip
+  // (mis. atlas modelengine 256×128) ikut dipaksa persegi dan jadi gepeng/rusak.
+  if (policy.enforceStrip && frames > 1) tH = Math.min(h0, Math.round(tW * frames));
   return { tW, tH, smoothing: policy.smoothing || (modeConfig.preservePixelArt ? "nearest" : "smooth") };
 }
 
 function createWorkerPool(count) {
-  const code = `
-    function cleanAlpha(d){let n=0;for(let i=0;i<d.length;i+=4){if(d[i+3]===0&&(d[i]||d[i+1]||d[i+2])){d[i]=d[i+1]=d[i+2]=0;n++;}}return n;}
-    function isSingleColor(d){if(d.length<4)return false;const r=d[0],g=d[1],b=d[2],a=d[3];for(let i=4;i<d.length;i+=4){if(d[i]!==r||d[i+1]!==g||d[i+2]!==b||d[i+3]!==a)return false;}return true;}
-    function nearestPow2(n){if(n<=0)return 1;let p=1;while(p<n)p<<=1;const l=p>>1;return(n-l<p-n)?l:p;}
-    const KEEP_CHUNKS = new Set(["IHDR","PLTE","tRNS","IDAT","IEND","acTL","fcTL","fdAT"]);
-    function stripPngMetadata(buf){
-      try{
-        const u8=new Uint8Array(buf);
-        if(u8.length<8) return {out:buf,stripped:0};
-        const sig=[137,80,78,71,13,10,26,10];
-        for(let i=0;i<8;i++) if(u8[i]!==sig[i]) return {out:buf,stripped:0};
-        let pos=8, stripped=0;
-        const keepRanges=[[0,8]];
-        while(pos+8<=u8.length){
-          const len=(u8[pos]<<24|u8[pos+1]<<16|u8[pos+2]<<8|u8[pos+3])>>>0;
-          const type=String.fromCharCode(u8[pos+4],u8[pos+5],u8[pos+6],u8[pos+7]);
-          const chunkTotal=8+len+4;
-          if(len<0||pos+chunkTotal>u8.length) break;
-          if(KEEP_CHUNKS.has(type)){
-            keepRanges.push([pos,pos+chunkTotal]);
-          } else {
-            stripped+=chunkTotal;
-          }
-          pos+=chunkTotal;
-          if(type==="IEND") break;
-        }
-        if(stripped===0) return {out:buf,stripped:0};
-        let totalLen=0;
-        for(const [s,e] of keepRanges) totalLen+=(e-s);
-        const result=new Uint8Array(totalLen);
-        let offset=0;
-        for(const [s,e] of keepRanges){ result.set(u8.subarray(s,e),offset); offset+=(e-s); }
-        return {out:result.buffer,stripped};
-      }catch{ return {out:buf,stripped:0}; }
-    }
-    self.onmessage=async({data:p})=>{
-      const{id,buffer,w0,h0,tW,tH,smoothing,sizeGuard,doAlphaClean,doSingleColor,doPowerOfTwo,doStripMeta}=p;
-      try{
-        if(!buffer){self.postMessage({id,ok:true,out:buffer,changed:false});return;}
-        let metaStripped=0;
-        let workBuffer=buffer;
-        if(doStripMeta){
-          const r=stripPngMetadata(buffer);
-          workBuffer=r.out; metaStripped=r.stripped;
-        }
-        const blob=new Blob([workBuffer],{type:"image/png"});
-        const bmp=await createImageBitmap(blob);
-        let finalW=tW,finalH=tH;
-        if(doPowerOfTwo){finalW=nearestPow2(tW);finalH=nearestPow2(tH);}
-        const oc=new OffscreenCanvas(finalW,finalH);
-        const ctx=oc.getContext("2d");
-        ctx.imageSmoothingEnabled=smoothing!=="nearest";
-        ctx.imageSmoothingQuality="high";
-        ctx.drawImage(bmp,0,0,finalW,finalH);
-        bmp.close();
-        const id2=ctx.getImageData(0,0,finalW,finalH);
-        if(doSingleColor&&isSingleColor(id2.data)){
-          const sc=new OffscreenCanvas(1,1);
-          const sc2=sc.getContext("2d");
-          sc2.putImageData(new ImageData(new Uint8ClampedArray([id2.data[0],id2.data[1],id2.data[2],id2.data[3]]),1,1),0,0);
-          const sb=await sc.convertToBlob({type:"image/png"});
-          const sbuf=await sb.arrayBuffer();
-          self.postMessage({id,ok:true,out:sbuf,changed:true,singleColor:true,metaStripped},[sbuf]);return;
-        }
-        let alphaFixed=0;
-        if(doAlphaClean) alphaFixed=cleanAlpha(id2.data);
-        if(alphaFixed>0) ctx.putImageData(id2,0,0);
-        const outBlob=await oc.convertToBlob({type:"image/png"});
-        const out=await outBlob.arrayBuffer();
-        const orig=buffer.byteLength||buffer.length||0;
-        const changed=finalW!==w0||finalH!==h0||alphaFixed>0||metaStripped>0;
-        if(sizeGuard&&!changed&&out.byteLength>=orig){self.postMessage({id,ok:true,out:buffer,changed:false,guarded:true},[buffer]);return;}
-        self.postMessage({id,ok:true,out,changed,alphaFixed,finalW,finalH,metaStripped},[out]);
-      }catch(e){self.postMessage({id,ok:false,error:e.message});}
-    };
-  `;
-  const url = URL.createObjectURL(new Blob([code], { type:"application/javascript" }));
-  const workers = Array.from({ length: count }, () => new Worker(url));
+  // Worker modul terpisah (src/lib/pngWorker.js) yang memakai encoder PNG lossless sendiri.
+  const workers = Array.from({ length: count }, () => new Worker(new URL("../lib/pngWorker.js", import.meta.url), { type:"module" }));
   let seq = 0;
   const queues = workers.map(() => []);
   const active = workers.map(() => false);
@@ -451,6 +382,11 @@ function createWorkerPool(count) {
       if (data.ok) resolve(data); else reject(new Error(data.error));
       pump(idx);
     };
+    workers[idx].onerror = (ev) => {
+      active[idx] = false;
+      reject(new Error(ev?.message || "worker error"));
+      pump(idx);
+    };
     workers[idx].postMessage({ ...p, id }, p.buffer ? [p.buffer] : []);
   }
 
@@ -460,7 +396,7 @@ function createWorkerPool(count) {
     return new Promise((resolve, reject) => { queues[minIdx].push({ id, resolve, reject, p: { ...payload, id, type:"png" } }); pump(minIdx); });
   }
 
-  return { runPngJob, destroy() { workers.forEach(w => w.terminate()); URL.revokeObjectURL(url); } };
+  return { runPngJob, destroy() { workers.forEach(w => w.terminate()); } };
 }
 
 function classifyLog(msg) {
@@ -474,6 +410,8 @@ function classifyLog(msg) {
 }
 
 const FAQ_DATA = [
+  { q:"Kenapa dulu ukuran pack bisa malah naik setelah optimize?", a:"Encoder PNG bawaan browser (canvas) tidak memakai palette dan filter optimal, jadi hasilnya sering lebih besar dari PNG asli. Sejak v2.2 Ghaizers memakai encoder lossless sendiri + Size Guard yang selalu memilih file terkecil, sehingga pack tidak akan membesar lagi." },
+  { q:"Apa bedanya preset Lossless Safe?", a:"Resolusi texture tetap 100% dan pixel identik dengan aslinya. Hanya kompresi ulang, metadata dan JSON yang dirapikan. Paling aman untuk pack yang tidak boleh berubah tampilannya." },
   { q:"Apakah tool ini aman?", a:"Ya, 100% aman. Semua proses berjalan di browser kamu (client-side). File packmu tidak pernah diunggah ke server manapun." },
   { q:"Kenapa file ZIP error saat diupload?", a:"Kemungkinan file ZIP dibuat dengan tool non-standard (WinRAR setting khusus). Solusi: extract dulu dengan ZArchiver/7-Zip, lalu zip ulang." },
   { q:"Apakah kualitas texture berkurang?", a:"Tergantung mode. Mode Normal mempertahankan kualitas visual yang sangat baik. Alpha Cleanup dan Single-Color Detection adalah 100% lossless secara visual." },
@@ -485,6 +423,7 @@ const FAQ_DATA = [
 ];
 
 const CHANGELOG_DATA = [
+  { version:"v2.2", date:"2026", changes:["FIX: ukuran pack naik setelah optimize — PNG kini di-encode ulang dengan encoder lossless sendiri, bukan canvas browser","Smart PNG Encoder: palette/indexed 1–8 bit, color type minimum, adaptive filter","Size Guard universal: tiap PNG dibandingkan dengan aslinya, yang lebih kecil dipakai","FIX: texture kecil tidak lagi di-upscale oleh minSize (penyebab file membesar)","FIX: atlas non-strip (mis. modelengine) tidak lagi digepengkan oleh enforce-strip","FIX: file tidak lagi hilang dari hasil ZIP jika worker gagal — file asli dipertahankan","Pemrosesan paralel sungguhan: semua Web Worker dipakai (jauh lebih cepat)","Mode & preset Lossless Safe (resolusi 100%, kualitas identik)","Palette Quantize opsional untuk texture besar (lossy, off by default)","Ringkasan baru: PNG dihemat, Palette PNG, Top penghematan, tombol Download lagi, peringatan jika hasil tidak lebih kecil","PNG animasi (APNG) dan PNG interlaced/16-bit tidak disentuh agar aman"] },
   { version:"v2.0", date:"2025", changes:["Hero section & landing page baru","Drag & Drop zone dengan animasi","Progress ring SVG animated","Console dengan syntax highlighting & filter","Pack Analyzer (scan tanpa optimize)","Power-of-two enforcement","JSON key sorting untuk better compression",".lang & .bbmodel support","System file auto-skip (.DS_Store, Thumbs.db)","Preset system (Pojav Lite, Server Pack, dll)","Share hasil & badge generator","Halaman FAQ & Changelog"] },
   { version:"v1.x", date:"2024", changes:["Alpha pixel cleanup","Single-color detection → 1×1","Deep JSON clean","OGG safe strip","Shader/properties minify","Web Workers multi-thread","Pojav Log Auto-Fix","SHA-1 verification","SEO (sitemap, robots.txt, meta tags)"] },
 ];
@@ -707,10 +646,10 @@ function ShareResults({ summary }) {
 }
 
 const DOCS_ITEMS = [
-  { title:"PNG Optimization", icon:FileImage, content:"Ghaizers menggunakan beberapa teknik untuk PNG:\n\n• Smart Resize: Scale texture berdasarkan mode yang dipilih, dengan kategori policy per folder (GUI, font, entity, particle)\n• Alpha Pixel Cleanup: Zero-out RGB pada pixel fully transparent (alpha=0). Tidak ada perubahan visual, tapi entropy PNG turun dan ZIP menjadi lebih kecil\n• Single-Color Detection: Deteksi PNG yang semua pixelnya identik warna → resize ke 1×1px\n• Power-of-Two: Snap ukuran ke dimensi 2^n terdekat (16,32,64...) untuk GPU efficiency\n• Size Guard: Jika hasil resize lebih besar dari original, file asli digunakan" },
+  { title:"PNG Optimization", icon:FileImage, content:"Ghaizers menggunakan beberapa teknik untuk PNG:\n\n• Smart Resize: Scale texture berdasarkan mode yang dipilih, dengan kategori policy per folder (GUI, font, entity, particle)\n• Alpha Pixel Cleanup: Zero-out RGB pada pixel fully transparent (alpha=0). Tidak ada perubahan visual, tapi entropy PNG turun dan ZIP menjadi lebih kecil\n• Single-Color Detection: Deteksi PNG yang semua pixelnya identik warna → resize ke 1×1px\n• Power-of-Two: Snap ukuran ke dimensi 2^n terdekat (16,32,64...) untuk GPU efficiency\n• Smart PNG Encoder (baru): encoder PNG sendiri — palette/indexed (1/2/4/8-bit), color type minimum, adaptive filter. 100% lossless\n• Size Guard: Setiap PNG dibandingkan dengan aslinya; yang lebih kecil yang dipakai, jadi pack tidak akan membesar\n• Palette Quantize (opsional, lossy): texture besar dikurangi jadi maks 256 warna" },
   { title:"JSON Optimization", icon:FileJson, content:"• JSON Minify: Hapus semua whitespace dan newline yang tidak diperlukan Minecraft\n• Deep Clean: Hapus field comment (__comment, _comment, //) yang dibuat Blockbench dan tool lain\n• Key Sorting: Sort keys alphabetically untuk better DEFLATE compression\n• Sounds.json: Hapus entry dengan array sounds kosong\n• .mcmeta: Edit langsung di interface, credit ghaa otomatis diinjeksi" },
   { title:"OGG Optimization", icon:Volume2, content:"OGG optimization di Ghaizers adalah 100% lossless:\n• Strip ID3 header (metadata ID3v2 di awal file)\n• Strip ID3v1 tag (128 bytes di akhir file)\n• Trim null padding\n\nKualitas audio dijamin sama persis karena tidak ada re-encoding." },
-  { title:"Web Workers", icon:Cpu, content:"Resize PNG adalah operasi CPU-intensive. Tanpa Workers, browser akan freeze.\n\nGhaizers membuat worker pool dengan ukuran: Math.floor(hardwareConcurrency/2), minimum 2, maximum 4.\n\nSetiap worker menggunakan OffscreenCanvas API untuk resize tanpa block main thread. Buffer dikirim sebagai Transferable Objects (zero-copy)." },
+  { title:"Web Workers", icon:Cpu, content:"Resize PNG adalah operasi CPU-intensive. Tanpa Workers, browser akan freeze.\n\nGhaizers membuat worker pool dengan ukuran: Math.floor(hardwareConcurrency/2), minimum 2, maximum 4.\n\nSetiap worker menggunakan OffscreenCanvas API untuk resize tanpa block main thread. Buffer dikirim sebagai Transferable Objects. Sejak v2.2 file diproses paralel, jadi semua worker benar-benar terpakai." },
   { title:"Pojav Log Auto-Fix", icon:Activity, content:"Upload file latestlog.txt dari Pojav Launcher. Ghaizers akan:\n• Parse log untuk menemukan error 'size X is not multiple of frame size'\n• Extract nama file PNG yang bermasalah\n• Otomatis set enforce-strip untuk file tersebut saat optimize\n\nIni memperbaiki masalah texture animated yang tidak valid untuk Pojav." },
 ];
 
@@ -785,6 +724,8 @@ function ChangelogPage({ tr }) {
 }
 
 const FEATURE_ITEMS = [
+  { icon:Layers, title:"Smart PNG Encoder", desc:"Palette + adaptive filter, lossless, lebih kecil dari canvas" },
+  { icon:Shield, title:"Size Guard", desc:"Pakai file asli jika hasil tidak lebih kecil — tidak pernah membesar" },
   { icon:FileImage, title:"PNG Smart Resize", desc:"Scale texture cerdas dengan policy per folder" },
   { icon:Zap, title:"Single-Color Detect", desc:"1px optimization → hemat 98% untuk warna solid" },
   { icon:Shield, title:"Alpha Cleanup", desc:"Zero-out pixel transparan, lossless secara visual" },
@@ -817,6 +758,9 @@ export default function Home() {
   const [doJsonKeySort, setDoJsonKeySort] = useState(true);
   const [doLangMinify, setDoLangMinify] = useState(true);
   const [doStripMeta, setDoStripMeta] = useState(true);
+  const [doQuantize, setDoQuantize] = useState(false);
+  const [sizeGuard, setSizeGuard] = useState(true);
+  const [resultBlob, setResultBlob] = useState(null);
 
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -880,12 +824,13 @@ export default function Home() {
     setDoPowerOfTwo(p.doPowerOfTwo); setDoJsonKeySort(p.doJsonKeySort);
     setDoLangMinify(p.doLangMinify);
     setDoStripMeta(p.doStripMeta ?? true);
+    setDoQuantize(p.doQuantize ?? false);
     appendLog(`Preset "${p.label}" diterapkan.`);
   }, [appendLog]);
 
   const handleFile = useCallback(async (f) => {
     if (!f) return;
-    setFile(f); setFileName(f.name); setSummary(null); setAnalyzerResult(null);
+    setFile(f); setFileName(f.name); setSummary(null); setAnalyzerResult(null); setResultBlob(null);
     setLogs([]); logBufferRef.current = [];
     setProgress({ done:0, total:0, etaSec:null });
     setMcmetaText(""); setMcmetaLoaded(false); setMcmetaError("");
@@ -929,8 +874,9 @@ export default function Home() {
     appendLog(`Mode: ${baseMode.label} | Scale: ${(effectiveScale*100).toFixed(0)}%`);
     appendLog(`Workers: ${computedWorkerCount} | ZIP Lv: ${zipCompressionLevel}`);
     appendLog(`Alpha:${doAlphaClean?"on":"off"} 1Color:${doSingleColor?"on":"off"} Pow2:${doPowerOfTwo?"on":"off"} JSONSort:${doJsonKeySort?"on":"off"}`);
+    appendLog(`SizeGuard:${sizeGuard?"on":"off"} Quantize:${doQuantize?"on":"off"} | Encoder PNG: lossless palette + adaptive filter`);
 
-    setIsProcessing(true); setSummary(null); setAnalyzerResult(null);
+    setIsProcessing(true); setSummary(null); setAnalyzerResult(null); setResultBlob(null);
     setProgress({ done:0, total:0, etaSec:null });
     const pool = createWorkerPool(computedWorkerCount);
     const t0 = performance.now();
@@ -940,7 +886,8 @@ export default function Home() {
       appendLog("ZIP berhasil dibaca.");
       const outZip = new JSZip();
       const entries = Object.values(zip.files);
-      const stats = { totalFiles:0, pngCount:0, pngOptimized:0, pngSkippedByIHDR:0, pngSingleColor:0, pngAlphaCleaned:0, pngPowerOfTwo:0, pngMetaStrippedBytes:0, jsonCount:0, jsonMinified:0, jsonDeepCleaned:0, jsonKeySorted:0, removed:0, oggCount:0, oggOptimized:0, shaderCount:0, shaderMinified:0, langCount:0, bbmodelCount:0, oversizedWarnings:0 };
+      const stats = { totalFiles:0, pngCount:0, pngOptimized:0, pngSkippedByIHDR:0, pngSingleColor:0, pngAlphaCleaned:0, pngPowerOfTwo:0, pngMetaStrippedBytes:0, jsonCount:0, jsonMinified:0, jsonDeepCleaned:0, jsonKeySorted:0, removed:0, oggCount:0, oggOptimized:0, shaderCount:0, shaderMinified:0, langCount:0, bbmodelCount:0, oversizedWarnings:0, pngGuarded:0, pngPalette:0, pngQuantized:0, pngBytesSaved:0 };
+      const fileDeltas = [];
       const totalToProcess = entries.filter(e => !e.dir).length;
       setProgress({ done:0, total:totalToProcess, etaSec:null });
       let done = 0;
@@ -952,32 +899,27 @@ export default function Home() {
         if (done%15===0 || done===totalToProcess) setProgress({ done, total:totalToProcess, etaSec:rate>0?Math.round(left/rate):null });
       };
 
-      for (const entry of entries) {
+      const handleEntry = async (entry) => {
         try {
-        if (entry.dir) { outZip.folder(entry.name); continue; }
         const name = entry.name, lower = name.toLowerCase();
         stats.totalFiles++;
-        if (shouldExcludeNonGameFile(lower, name)) { stats.removed++; appendLog(`Dibuang: ${name}`); tick(); continue; }
+        if (shouldExcludeNonGameFile(lower, name)) { stats.removed++; appendLog(`Dibuang: ${name}`); return; }
         if ([".fsh",".vsh",".glsl"].some(e => lower.endsWith(e))) {
           stats.shaderCount++;
           if (doShaderMinify) { const txt = await entry.async("string"); const min = minifyShader(txt); outZip.file(name, min.length<txt.length?min:txt); if(min.length<txt.length)stats.shaderMinified++; }
-          else outZip.file(name, await entry.async("arraybuffer"));
-          tick(); continue;
+          else outZip.file(name, await entry.async("arraybuffer")); return;
         }
         if (lower.endsWith(".properties")) {
-          outZip.file(name, doShaderMinify ? minifyProperties(await entry.async("string")) : await entry.async("arraybuffer"));
-          tick(); continue;
+          outZip.file(name, doShaderMinify ? minifyProperties(await entry.async("string")) : await entry.async("arraybuffer")); return;
         }
         if (lower.endsWith(".lang")) {
           stats.langCount++;
           if (doLangMinify) { outZip.file(name, minifyLang(await entry.async("string"))); }
-          else outZip.file(name, await entry.async("arraybuffer"));
-          tick(); continue;
+          else outZip.file(name, await entry.async("arraybuffer")); return;
         }
         if (lower.endsWith(".bbmodel")) {
           stats.bbmodelCount++;
-          outZip.file(name, cleanBbmodel(await entry.async("string")));
-          tick(); continue;
+          outZip.file(name, cleanBbmodel(await entry.async("string"))); return;
         }
         if (lower === "pack.mcmeta") {
           stats.jsonCount++;
@@ -995,40 +937,58 @@ export default function Home() {
             if (typeof desc === "string" && !desc.includes("ghaa")) obj.pack.description = desc ? `${desc} §7| §cOptimized by §aghaa` : CREDIT_MCMETA_DESC;
             outZip.file(name, modeConfig.minifyJson ? JSON.stringify(obj) : JSON.stringify(obj, null, 2));
             stats.jsonMinified++; appendLog("pack.mcmeta: credit injected.");
-          } catch { outZip.file(name, toWrite); }
-          tick(); continue;
+          } catch { outZip.file(name, toWrite); } return;
         }
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
           if (optimizeOgg) { const { out, changed } = await optimizeOggSafe(buf); if(changed){stats.oggOptimized++;appendLog(`OGG: ${name}`);} outZip.file(name, out); }
-          else outZip.file(name, buf);
-          tick(); continue;
+          else outZip.file(name, buf); return;
         }
         if (lower.endsWith(".png")) {
           stats.pngCount++;
           const policy = getPolicyForPath(lower, dynamicStripPaths);
           if (!preservePixelArt && policy.smoothing === "nearest") policy.smoothing = "smooth";
-          if (policy.skip || policy.skipResize) { outZip.file(name, await entry.async("arraybuffer")); tick(); continue; }
+          // texture "skip"/"skipResize" (colormap, maps, font) tidak boleh diubah ukurannya,
+          // tapi tetap boleh dikompres ulang secara lossless.
+          const lockSize = !!(policy.skip || policy.skipResize);
           const buf = await entry.async("arraybuffer");
-          if (buf.byteLength < 2048) { outZip.file(name, buf); stats.pngSkippedByIHDR++; tick(); continue; }
+          if (buf.byteLength < 128) { outZip.file(name, buf); stats.pngSkippedByIHDR++; return; }
           const sz = readPngIHDRSize(buf);
-          if (!sz) { outZip.file(name, buf); tick(); continue; }
+          if (!sz) { outZip.file(name, buf); return; }
           const { w:w0, h:h0 } = sz;
           if (w0>1024 || h0>1024) { stats.oversizedWarnings++; appendLog(`Oversized: ${name} (${w0}×${h0})`); }
-          const { tW, tH, smoothing } = computeTargetSize({ w0, h0, policy, modeConfig });
-          const res = await pool.runPngJob({ buffer:buf, w0, h0, tW, tH, smoothing, sizeGuard:true, doAlphaClean, doSingleColor, doPowerOfTwo, doStripMeta });
-          if (res?.metaStripped > 0) stats.pngMetaStrippedBytes = (stats.pngMetaStrippedBytes||0) + res.metaStripped;
-          if (res?.singleColor) { stats.pngSingleColor++; stats.pngOptimized++; appendLog(`1×1: ${name}`); }
-          else if (res?.changed) {
-            stats.pngOptimized++;
-            if (res.alphaFixed>0) stats.pngAlphaCleaned++;
-            if (doPowerOfTwo && res.finalW && (res.finalW!==w0||res.finalH!==h0)) stats.pngPowerOfTwo++;
-            if (tW!==w0||tH!==h0) appendLog(`PNG: ${name} (${w0}×${h0}→${res.finalW||tW}×${res.finalH||tH})`);
-            else if (res.alphaFixed>0) appendLog(`Alpha: ${name}`);
-            else if (res.metaStripped>0) appendLog(`Metadata stripped: ${name} (-${res.metaStripped}B)`);
+          const tgt = lockSize ? { tW:w0, tH:h0, smoothing:"nearest" } : computeTargetSize({ w0, h0, policy, modeConfig });
+          let res;
+          try {
+            // buffer disalin supaya `buf` asli tetap utuh di main thread (tidak ikut ter-transfer)
+            res = await pool.runPngJob({ buffer:buf.slice(0), w0, h0, tW:tgt.tW, tH:tgt.tH, smoothing:tgt.smoothing, sizeGuard,
+              doAlphaClean, doSingleColor:doSingleColor&&!lockSize, doPowerOfTwo:doPowerOfTwo&&!lockSize, doStripMeta, doQuantize:doQuantize&&!lockSize });
+          } catch (jobErr) {
+            appendLog(`WARN PNG gagal diproses, file asli dipertahankan: ${name} (${jobErr.message})`);
+            outZip.file(name, buf); return;
           }
-          outZip.file(name, res?.out || buf); tick(); continue;
+          let finalBuf = buf;
+          if (res.useOriginal || !res.out) {
+            if (res.guarded) { stats.pngGuarded++; appendLog(`Guard: ${name} tetap asli (hasil baru tidak lebih kecil)`); }
+          } else {
+            finalBuf = res.out;
+            if (res.metaStripped > 0) stats.pngMetaStrippedBytes += res.metaStripped;
+            if (res.singleColor) { stats.pngSingleColor++; stats.pngOptimized++; appendLog(`1×1: ${name}`); }
+            else {
+              stats.pngOptimized++;
+              if (res.alphaFixed>0) stats.pngAlphaCleaned++;
+              if (res.kind && res.kind.startsWith("palette")) stats.pngPalette++;
+              if (res.quantized) { stats.pngQuantized++; appendLog(`Quantize: ${name}`); }
+              if (doPowerOfTwo && res.finalW && (res.finalW!==w0||res.finalH!==h0)) stats.pngPowerOfTwo++;
+              const pct = ((1 - finalBuf.byteLength/buf.byteLength)*100).toFixed(0);
+              if (res.finalW!==w0||res.finalH!==h0) appendLog(`PNG: ${name} (${w0}×${h0}→${res.finalW}×${res.finalH}) -${pct}%`);
+              else appendLog(`PNG: ${name} ${res.kind||""} -${pct}%`);
+            }
+          }
+          stats.pngBytesSaved += buf.byteLength - finalBuf.byteLength;
+          fileDeltas.push({ name, before:buf.byteLength, after:finalBuf.byteLength });
+          outZip.file(name, finalBuf); return;
         }
         if (lower.endsWith(".json") || lower.endsWith(".mcmeta")) {
           stats.jsonCount++;
@@ -1040,16 +1000,30 @@ export default function Home() {
               if (doJsonKeySort) { const b=JSON.stringify(obj); obj=sortJsonKeys(obj); if(JSON.stringify(obj)!==b)stats.jsonKeySorted++; }
               outZip.file(name, JSON.stringify(obj)); stats.jsonMinified++;
             } catch { outZip.file(name, txt); }
-          } else outZip.file(name, txt);
-          tick(); continue;
+          } else outZip.file(name, txt); return;
         }
-        outZip.file(name, await entry.async("arraybuffer")); tick();
+        outZip.file(name, await entry.async("arraybuffer"));
         } catch (fileErr) {
-          stats.removed++;
-          appendLog(`SKIP (corrupt/error): ${entry.name} — ${fileErr.message}`);
+          // FIX: jangan buang file saat gagal — pertahankan file asli supaya pack tidak rusak.
+          appendLog(`WARN gagal memproses ${entry.name} — ${fileErr.message}; file asli dipertahankan`);
+          try { outZip.file(entry.name, await entry.async("arraybuffer")); }
+          catch { stats.removed++; appendLog(`SKIP (corrupt): ${entry.name}`); }
+        }
+      };
+
+      // FIX: sebelumnya `await` di dalam for-loop membuat hanya 1 worker yang bekerja.
+      // Sekarang beberapa file diproses bersamaan sehingga semua worker terpakai.
+      entries.filter(e => e.dir).forEach(e => outZip.folder(e.name));
+      const queue = entries.filter(e => !e.dir);
+      let cursor = 0;
+      const concurrency = Math.max(2, computedWorkerCount * 2);
+      await Promise.all(Array.from({ length: concurrency }, async () => {
+        while (cursor < queue.length) {
+          const entry = queue[cursor++];
+          await handleEntry(entry);
           tick();
         }
-      }
+      }));
 
       outZip.file("GHAIZERS_CREDIT.txt", CREDIT_TXT);
       outZip.file("JANGAN_BAYAR_INI.txt", "Tool Ghaizers2.0 ini GRATIS!\nJika kamu membayar → kamu DITIPU!\nLapor: github.com/KhaizenNomazen\nMenjual = UU Hak Cipta No.28/2014");
@@ -1064,9 +1038,16 @@ export default function Home() {
       });
       const sha1 = await sha1HexFromBlob(blob);
       if (sha1) appendLog(`SHA-1: ${sha1}`);
-      appendLog("Selesai. Download dimulai...");
-      triggerDownload(blob, "optimize_file.zip");
-      setSummary({ ...stats, originalSize:file.size, optimizedSize:blob.size, sha1:sha1||null, workers:computedWorkerCount, compressionLevel:zipCompressionLevel });
+      const grew = blob.size >= file.size;
+      setResultBlob(blob);
+      if (grew) {
+        appendLog(`WARN: hasil (${(blob.size/1e6).toFixed(2)} MB) tidak lebih kecil dari file asli (${(file.size/1e6).toFixed(2)} MB). Download otomatis dilewati — coba preset Lossless Safe atau turunkan resolusi.`);
+      } else {
+        appendLog("Selesai. Download dimulai...");
+        triggerDownload(blob, "optimize_file.zip");
+      }
+      const topSavings = fileDeltas.filter(d => d.before > d.after).sort((x,y) => (y.before-y.after)-(x.before-x.after)).slice(0, 5);
+      setSummary({ ...stats, grew, topSavings, originalSize:file.size, optimizedSize:blob.size, sha1:sha1||null, workers:computedWorkerCount, compressionLevel:zipCompressionLevel });
       flushLogs();
       setProgress({ done:totalToProcess, total:totalToProcess, etaSec:0 });
     } catch(e) { appendLog("ERROR: " + e.message); flushLogs(); }
@@ -1115,7 +1096,7 @@ export default function Home() {
             <button onClick={toggleLang} className="lang-toggle">
               <Globe size={12}/>{lang==="id" ? "ID" : "EN"}
             </button>
-            <span className="navbar-version">v2.0</span>
+            <span className="navbar-version">v2.2</span>
           </div>
         </nav>
 
@@ -1219,11 +1200,11 @@ export default function Home() {
                       {mode === m.id && <div className="mode-card-dot"/>}
                     </div>
                     <p className="mode-card-desc">
-                      {m.id==="normal" ? tr.mode_normal_desc : m.id==="extreme" ? tr.mode_extreme_desc : tr.mode_ultra_desc}
+                      {m.id==="lossless" ? m.description : m.id==="normal" ? tr.mode_normal_desc : m.id==="extreme" ? tr.mode_extreme_desc : tr.mode_ultra_desc}
                     </p>
                     <div className="mode-card-tags">
                       <span className="mode-tag">Scale {Math.round(m.scale*100)}%</span>
-                      <span className="mode-tag">Max {m.maxSize}px</span>
+                      <span className="mode-tag">{m.id==="lossless" ? "Tanpa resize" : `Max ${m.maxSize}px`}</span>
                     </div>
                   </button>
                 ))}
@@ -1236,14 +1217,14 @@ export default function Home() {
                 <div><div className="sec-title">{tr.sec_resolution_title}</div><div className="sec-sub">{tr.sec_resolution_sub}</div></div>
               </div>
               <div className="slider-row">
-                <input type="range" min="40" max="120" value={resolutionPercent}
+                <input type="range" min="40" max="100" value={resolutionPercent}
                   onChange={e => setResolutionPercent(Number(e.target.value))}
                   className="slider" disabled={isProcessing||isAnalyzing}
-                  style={{"--value":`${((resolutionPercent-40)/80)*100}%`}}/>
+                  style={{"--value":`${((resolutionPercent-40)/60)*100}%`}}/>
                 <div className="slider-val">{resolutionPercent}%</div>
               </div>
               <div className="pill-row">
-                {[40,60,80,100,120].map(v => (
+                {[40,60,80,100].map(v => (
                   <button key={v} className="pill" disabled={isProcessing||isAnalyzing} onClick={() => setResolutionPercent(v)}>{v}%</button>
                 ))}
               </div>
@@ -1265,6 +1246,8 @@ export default function Home() {
                 <CheckItem checked={doJsonKeySort} onChange={setDoJsonKeySort} disabled={isProcessing||isAnalyzing} label={tr.opt_jsonsort} desc={tr.opt_jsonsort_desc}/>
                 <CheckItem checked={doLangMinify} onChange={setDoLangMinify} disabled={isProcessing||isAnalyzing} label={tr.opt_lang} desc={tr.opt_lang_desc}/>
                 <CheckItem checked={doStripMeta} onChange={setDoStripMeta} disabled={isProcessing||isAnalyzing} label="PNG Metadata Strip" desc="Hapus chunk tersembunyi (tEXt, iCCP, gAMA, dll) dari PNG, tanpa efek visual"/>
+                <CheckItem checked={sizeGuard} onChange={setSizeGuard} disabled={isProcessing||isAnalyzing} label="Size Guard" desc="Jika hasil sebuah PNG tidak lebih kecil dari aslinya, pakai file asli. Mencegah pack malah membesar"/>
+                <CheckItem checked={doQuantize} onChange={setDoQuantize} disabled={isProcessing||isAnalyzing} label="Palette Quantize (lossy)" desc="Kurangi texture besar (≥64×64) jadi maks 256 warna. Hemat banyak, ada sedikit perubahan warna"/>
               </div>
             </div>
 
@@ -1454,18 +1437,36 @@ export default function Home() {
                   <div><div className="sec-title">Hasil Optimasi</div></div>
                 </div>
                 <div className="savings-hero">
-                  <span className="savings-num">
+                  <span className="savings-num" style={summary.grew ? { color:"var(--warn, #fbbf24)" } : undefined}>
                     {(((summary.originalSize-summary.optimizedSize)/summary.originalSize)*100).toFixed(1)}%
                   </span>
-                  <div className="savings-lbl">ukuran berkurang</div>
+                  <div className="savings-lbl">{summary.grew ? "ukuran tidak berkurang" : "ukuran berkurang"}</div>
                   <div className="savings-sizes">
                     {(summary.originalSize/1e6).toFixed(2)} MB
                     <ArrowRight size={12} style={{ display:"inline", margin:"0 6px", color:"var(--text-disabled)" }}/>
                     {(summary.optimizedSize/1e6).toFixed(2)} MB
                   </div>
                 </div>
+                {summary.grew && (
+                  <div style={{ marginTop:12, padding:"10px 14px", borderRadius:10, fontSize:12, lineHeight:1.5, color:"var(--warn, #fbbf24)", background:"rgba(251,191,36,0.08)", border:"1px solid rgba(251,191,36,0.25)", display:"flex", gap:8, alignItems:"flex-start" }}>
+                    <AlertTriangle size={14} style={{ flexShrink:0, marginTop:2 }}/>
+                    <span>Hasil tidak lebih kecil dari file asli, jadi download otomatis dilewati. Pack ini kemungkinan sudah sangat optimal — coba preset <b>Ultra Compress</b> / turunkan resolusi, atau download manual jika tetap ingin.</span>
+                  </div>
+                )}
+                {resultBlob && (
+                  <div style={{ display:"flex", justifyContent:"center", marginTop:14 }}>
+                    <button className="pill" onClick={() => triggerDownload(resultBlob, "optimize_file.zip")}
+                      style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px" }}>
+                      <Download size={13}/>{summary.grew ? "Download hasil tetap" : "Download lagi"} ({(resultBlob.size/1e6).toFixed(2)} MB)
+                    </button>
+                  </div>
+                )}
                 <div className="summary-grid">
                   <SummaryCard label={tr.sum_png} value={`${summary.pngOptimized}/${summary.pngCount}`}/>
+                  {summary.pngBytesSaved>0&&<SummaryCard label="PNG Dihemat" value={summary.pngBytesSaved>1e6?`${(summary.pngBytesSaved/1e6).toFixed(2)}MB`:`${(summary.pngBytesSaved/1e3).toFixed(1)}KB`}/>}
+                  {summary.pngPalette>0&&<SummaryCard label="Palette PNG" value={summary.pngPalette}/>}
+                  {summary.pngGuarded>0&&<SummaryCard label="Size Guard (tetap asli)" value={summary.pngGuarded}/>}
+                  {summary.pngQuantized>0&&<SummaryCard label="Quantized" value={summary.pngQuantized}/>}
                   <SummaryCard label={tr.sum_png_skip} value={summary.pngSkippedByIHDR}/>
                   {summary.pngSingleColor>0&&<SummaryCard label={tr.sum_single} value={summary.pngSingleColor}/>}
                   {summary.pngAlphaCleaned>0&&<SummaryCard label={tr.sum_alpha} value={summary.pngAlphaCleaned}/>}
@@ -1494,7 +1495,18 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <ShareResults summary={summary}/>
+                {summary.topSavings?.length>0 && (
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-tertiary)", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.05em" }}>Top penghematan</div>
+                    {summary.topSavings.map(d => (
+                      <div key={d.name} style={{ display:"flex", justifyContent:"space-between", gap:10, fontSize:11, padding:"4px 0", borderBottom:"1px solid var(--border-faint)" }}>
+                        <code style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{d.name.split("/").slice(-2).join("/")}</code>
+                        <span style={{ color:"var(--ok)", flexShrink:0 }}>{(d.before/1e3).toFixed(1)}KB → {(d.after/1e3).toFixed(1)}KB</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!summary.grew && <ShareResults summary={summary}/>}
                 <p style={{ textAlign:"center", fontSize:11, color:"var(--text-disabled)", marginTop:16, display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
                   <CheckCircle2 size={12} style={{ color:"var(--ok)" }}/>
                   <code>optimize_file.zip</code>{" "}{tr.sum_done}

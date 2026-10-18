@@ -8,4 +8,8 @@ export default defineConfig({
   build: {
     inlineStylesheets: "auto",
   },
+  vite: {
+    // Web Worker PNG (src/lib/pngWorker.js) dibundle sebagai ES module
+    worker: { format: "es" },
+  },
 });
