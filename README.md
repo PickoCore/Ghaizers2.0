@@ -1,127 +1,245 @@
-# Ghaizers2.0 — Astro.js Edition (Enterprise SEO)
+<div align="center">
 
-Migrasi dari Next.js ke **Astro.js**. Halaman utama dirender sebagai HTML statis
-(SSG) untuk SEO maksimal, dan tool optimizer (interaktif) tetap berjalan penuh
-di browser sebagai **React island** (`client:load`) — jadi cepat di-crawl
-Google *dan* tetap 100% client-side processing seperti sebelumnya.
+<img src="public/android-chrome-192x192.png" alt="Ghaizers logo" width="96" height="96" />
 
-## v2.2 — Fix ukuran naik + sistem PNG baru
-- 🐞 **Fix utama**: ukuran pack naik setelah optimize. Penyebabnya encoder PNG canvas browser (tanpa palette & filter optimal) + hasilnya tetap dipakai walau lebih besar. Sekarang pakai encoder lossless sendiri (`src/lib/png.js`) + **Size Guard** per file.
-- 🐞 Texture kecil tidak lagi di-upscale oleh `minSize`; atlas non-strip (modelengine) tidak lagi digepengkan `enforceStrip`.
-- 🐞 File tidak lagi hilang dari ZIP saat worker gagal; worker kini benar-benar paralel.
-- ✨ Smart PNG Encoder (palette 1/2/4/8-bit, color type minimum, adaptive filter), mode & preset **Lossless Safe**, **Palette Quantize** opsional, ringkasan baru (Top penghematan, Download lagi, peringatan jika hasil tidak lebih kecil).
-- 🧪 Tes engine: `npm run test:png`
-- ⚠️ Belum dijalankan `npm install`/`astro build` di sandbox (offline) — jalankan `npm run dev` & `npm run build` dulu sebelum deploy.
+# Ghaizers 2.0
 
-## Apa yang berubah (migrasi Astro)
-- ✅ Framework: Next.js → **Astro 4** (output HTML default = 0 JS kecuali komponen interaktif)
-- ✅ SEO: meta title/description per halaman, Open Graph, Twitter Card, canonical, hreflang, `robots` meta
-- ✅ Structured data (JSON-LD): `WebApplication`, `Organization`, `FAQPage`
-- ✅ Sitemap otomatis via `@astrojs/sitemap` (`/sitemap-index.xml`) — tidak perlu update manual lagi
-- ✅ `robots.txt` mengarah ke sitemap otomatis
-- ✅ Logic optimizer (PNG/JSON/OGG compression, JSZip, dst) **tidak diubah sama sekali** — dipindah utuh ke `src/components/PackOptimizer.jsx`
+**Minecraft Resource Pack Optimizer — 100% di browser, gratis, tanpa upload.**
 
-## Yang masih perlu kamu lakukan secara manual
-1. **Buat gambar Open Graph** `public/og-cover.png` ukuran 1200×630px (untuk preview share di WhatsApp/Twitter/Facebook). Tanpa file ini, link masih valid tapi tidak ada gambar preview.
-2. Cek ulang `google-site-verification` di `src/layouts/Layout.astro` — pastikan masih sama dengan punya kamu di Google Search Console.
-3. Setelah deploy live, **submit ulang sitemap** (`https://optimizer.ghaa.my.id/sitemap-index.xml`) ke Google Search Console.
-4. ⚠️ Project ini belum pernah dijalankan `npm install` / `npm run build` oleh saya (sandbox saya tidak punya akses internet). **Wajib kamu test `npm run dev` dan `npm run build` dulu** sebelum deploy ke production, untuk memastikan tidak ada typo/error saat porting dari JSX Next.js ke Astro.
+Kecilkan ukuran pack, ringankan untuk HP & Pojav, tanpa mengorbankan tampilan.
+
+[![Live](https://img.shields.io/badge/LIVE-optimizer.ghaa.my.id-22c55e?style=for-the-badge)](https://optimizer.ghaa.my.id)
+[![Version](https://img.shields.io/badge/version-2.2.0-6366f1?style=for-the-badge)](#-changelog)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+
+![Astro](https://img.shields.io/badge/Astro-4-ff5d01?logo=astro&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=black)
+![Client-side](https://img.shields.io/badge/processing-client--side-success)
+![No upload](https://img.shields.io/badge/server%20upload-none-success)
+![Lossless](https://img.shields.io/badge/PNG%20engine-lossless-8b5cf6)
+
+[**Coba Sekarang**](https://optimizer.ghaa.my.id) · [Fitur](#-fitur-utama) · [Cara Kerja](#-cara-kerja) · [Instalasi](#-instalasi) · [FAQ](#-faq)
+
+</div>
 
 ---
 
-## Langkah Deploy via Termux (lengkap, dari nol)
+## ✨ Kenapa Ghaizers?
 
-### 1. Siapkan Termux
-```bash
-pkg update && pkg upgrade -y
-pkg install git nodejs-lts -y
-node -v   # pastikan v18+ atau v20+
+| | |
+|---|---|
+| 🔒 **Privat** | Semua proses berjalan di browser kamu. Pack tidak pernah dikirim ke server mana pun. |
+| 🧠 **Smart PNG Encoder** | Encoder PNG lossless buatan sendiri (palette + adaptive filter), bukan encoder canvas browser yang sering membuat file membesar. |
+| 🛡️ **Size Guard** | Setiap file dibandingkan dengan aslinya. Yang lebih kecil yang dipakai, jadi pack tidak akan membesar. |
+| ⚡ **Cepat** | Pemrosesan paralel dengan Web Worker pool, browser tidak freeze. |
+| 📱 **Ramah HP** | UI responsif, preset khusus Pojav Launcher & device low-end. |
+| 🆓 **Gratis selamanya** | Open source, tanpa akun, tanpa iklan. |
+
+---
+
+## 🚀 Fitur Utama
+
+### 🖼️ PNG
+- **Smart PNG Encoder** — palette/indexed (1/2/4/8-bit), color type minimum, adaptive row filter. 100% lossless.
+- **Smart Resize** — scale per kategori folder (GUI, font, entity, particle). Texture **tidak pernah di-upscale**.
+- **Alpha Cleanup** — nol-kan RGB pada pixel transparan penuh (tanpa perubahan visual).
+- **Single-Color Detection** — texture satu warna dipadatkan menjadi 1×1.
+- **Power-of-Two** — snap ke 16/32/64/… untuk efisiensi GPU.
+- **Metadata Strip** — buang chunk tersembunyi (`tEXt`, `iCCP`, `gAMA`, dll).
+- **Palette Quantize** *(opsional, lossy)* — texture besar dikurangi jadi maks 256 warna.
+- **Aman by design** — APNG, PNG interlaced, dan 16-bit tidak disentuh.
+
+### 📄 File lain
+- **JSON** — minify, deep clean (hapus field komentar), key sorting untuk kompresi lebih baik.
+- **OGG** — strip ID3 & padding, **tanpa re-encode** (kualitas identik).
+- **Shader / `.properties` / `.lang` / `.bbmodel`** — minify & cleanup.
+- **File sampah** — `.DS_Store`, `Thumbs.db`, `__MACOSX`, dll otomatis dibuang.
+
+### 🧰 Tools
+- **Pack Analyzer** — scan masalah (oversized, JSON rusak, duplikat, file kosong) tanpa optimize.
+- **pack.mcmeta Editor** — edit langsung, credit otomatis diinjeksi.
+- **Pojav Log Auto-Fix** — parse `latestlog.txt` dan perbaiki texture animasi bermasalah.
+- **Custom pack icon**, **SHA-1 checksum**, **Badge generator**, **Share hasil**.
+- **Dwibahasa** — Indonesia & English.
+
+---
+
+## 🎚️ Mode & Preset
+
+| Mode | Scale | Maks. ukuran | Cocok untuk |
+|---|:---:|:---:|---|
+| **Lossless** | 100% | Tanpa resize | Pack yang tampilannya tidak boleh berubah |
+| **Normal** | 85% | 512 px | Seimbang kualitas & ukuran |
+| **Extreme** | 55% | 128 px | Device mid–low |
+| **Ultra Extreme** | 35% | 64 px | HP kentang / Pojav lemah |
+
+**Preset siap pakai:** `Lossless Safe` · `Pojav Lite` · `Server Pack` · `Ultra Compress` · `Quality`
+
+> 💡 Mulai dari **Lossless Safe** untuk hasil aman, lalu naik ke mode lebih agresif bila perlu.
+
+---
+
+## 🔬 Cara Kerja
+
+```
+ ZIP pack ──► scan entri ──► proses paralel (Web Worker pool)
+                               │
+                               ├─ PNG  : strip meta → resize → alpha clean → (quantize)
+                               │         → encode lossless → ⚖️ Size Guard (pilih terkecil)
+                               ├─ JSON : clean → sort → minify
+                               ├─ OGG  : strip ID3 (tanpa re-encode)
+                               └─ lainnya: copy / minify
+                               │
+                               ▼
+                    susun ZIP ──► SHA-1 ──► download
 ```
 
-### 2. Pindahkan/ekstrak project ke Termux
-```bash
-termux-setup-storage
-cd ~
-cp -r /storage/emulated/0/Download/ghaizers-astro ~/ghaizers-astro
-cd ~/ghaizers-astro
-```
+**Kenapa PNG bisa membesar di optimizer lain?** Encoder PNG bawaan browser (canvas) selalu menulis RGBA tanpa palette dan tanpa filter optimal, sehingga hasilnya sering lebih besar dari PNG asli. Ghaizers menulis PNG sendiri (`src/lib/png.js`) lalu membandingkan hasilnya dengan file asli sebelum dipakai.
 
-### 3. Install dependencies & test lokal
+---
+
+## 📦 Instalasi
+
+**Prasyarat:** Node.js 18+ (disarankan LTS)
+
 ```bash
+git clone https://github.com/PickoCore/Ghaizers2.0.git
+cd Ghaizers2.0
 npm install
-npm run dev
-# buka http://localhost:4321 di browser HP kamu untuk cek tampilan & fungsi
+npm run dev        # http://localhost:4321
 ```
-Kalau ada error saat `npm run dev`, baca pesan errornya — biasanya typo JSX hasil migrasi. Beri tahu saya pesan errornya kalau butuh dibantu fix.
 
-### 4. Build production (cek SEO output)
+| Perintah | Fungsi |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Build produksi ke `dist/` |
+| `npm run preview` | Preview hasil build |
+| `npm run test:png` | Tes engine PNG (round-trip lossless) |
+
+### 📱 Lewat Termux
+
 ```bash
-npm run build
-npm run preview
-```
-Cek `dist/index.html` — pastikan `<title>`, `<meta description>`, dan JSON-LD sudah muncul di HTML (klik kanan → View Source, bukan inspect element, supaya kelihatan HTML aslinya sebelum JS jalan — ini yang dilihat Googlebot).
-
-### 5. Setup Git & GitHub
-```bash
-git config --global user.name "Nama Kamu"
-git config --global user.email "email@kamu.com"
-
-git init
-git add .
-git commit -m "Migrate to Astro.js with enterprise-grade SEO"
-git branch -M main
+pkg update -y && pkg install git nodejs-lts -y
+git clone https://github.com/PickoCore/Ghaizers2.0.git
+cd Ghaizers2.0 && npm install && npm run dev
 ```
 
-Buat repo baru kosong di github.com (jangan centang "Initialize with README"), lalu:
-```bash
-git remote add origin https://github.com/USERNAME/Ghaizers2.0.git
-git push -u origin main
-```
-Saat diminta login:
-- Username: username GitHub kamu
-- Password: **bukan password akun** — gunakan Personal Access Token (PAT).
-  Buat di: GitHub → Settings → Developer settings → Personal access tokens → Generate new token (centang scope `repo`).
+### ☁️ Deploy
 
-### 6. Deploy ke hosting (gratis, auto-deploy tiap push)
-Pilih salah satu — semua support Astro secara native:
-
-**Vercel** (paling mudah):
-1. Buka vercel.com → Add New Project → Import repo GitHub kamu
-2. Framework preset otomatis terdeteksi "Astro" — biarkan default
-3. Deploy
-
-**Cloudflare Pages**:
-1. Buka dash.cloudflare.com → Workers & Pages → Create → Pages → Connect to Git
-2. Build command: `npm run build`, Output directory: `dist`
-3. Deploy
-
-Setelah connect, **setiap kali `git push` dari Termux, situs otomatis re-build & deploy** — tidak perlu upload manual lagi.
-
-### 7. Custom domain (kalau pakai `optimizer.ghaa.my.id`)
-Tambahkan domain di dashboard Vercel/Cloudflare Pages → ikuti instruksi DNS (biasanya tinggal tambah CNAME record di pengaturan DNS domain kamu).
+Project ini statis (SSG) dan siap di Vercel, Cloudflare Pages, atau Netlify.
+Build command: `npm run build` · Output directory: `dist`
 
 ---
 
-## Struktur project
+## 🗂️ Struktur Project
+
 ```
-ghaizers-astro/
-├── astro.config.mjs        # config Astro + integrasi React & sitemap
+Ghaizers2.0/
+├── astro.config.mjs
 ├── package.json
-├── public/                  # favicon, manifest, robots.txt (file statis)
-├── src/
-│   ├── layouts/
-│   │   └── Layout.astro     # SEO shell: meta, OG, JSON-LD, favicon (dipakai semua halaman)
-│   ├── pages/
-│   │   ├── index.astro      # homepage
-│   │   ├── privacy.astro
-│   │   └── terms.astro
-│   ├── components/
-│   │   ├── PackOptimizer.jsx   # tool utama (React island, client:load)
-│   │   ├── PrivacyContent.jsx
-│   │   └── TermsContent.jsx
-│   ├── lib/i18n.js           # sistem translasi ID/EN (tidak diubah)
-│   └── styles/globals.css
+├── public/                    # favicon, manifest, robots.txt, sitemap
+├── scripts/
+│   └── test-png.mjs           # tes engine PNG
+└── src/
+    ├── components/
+    │   ├── PackOptimizer.jsx  # UI + pipeline utama (React island)
+    │   ├── PrivacyContent.jsx
+    │   └── TermsContent.jsx
+    ├── layouts/Layout.astro   # SEO shell: meta, OG, JSON-LD
+    ├── lib/
+    │   ├── png.js             # decoder/encoder/quantizer PNG lossless
+    │   ├── pngWorker.js       # Web Worker: 1 job = 1 PNG
+    │   └── i18n.js            # terjemahan ID/EN
+    ├── pages/                 # index, privacy, terms
+    └── styles/globals.css
 ```
 
-## Catatan soal "rank #1 di Google"
-SEO teknis di project ini sudah enterprise-grade (SSG, structured data, sitemap, Core Web Vitals-friendly karena Astro 0-JS by default). Tapi ranking aktual juga ditentukan oleh **backlink, domain authority, dan kompetitor** — bagian itu di luar kode, perlu strategi konten & promosi jangka panjang.
+---
+
+## 🧪 Pengujian
+
+Engine PNG dites round-trip terhadap pixel asli (decode → encode → decode) untuk palette, grayscale, RGB, RGBA, dan 1-bit.
+
+```bash
+npm run test:png
+```
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>Apakah pack saya diunggah ke server?</b></summary>
+
+Tidak. Semua proses terjadi di browser (client-side).
+</details>
+
+<details>
+<summary><b>Apakah kualitas texture berkurang?</b></summary>
+
+Tergantung mode. **Lossless** tidak mengubah pixel sama sekali. Mode Normal/Extreme/Ultra menurunkan resolusi sesuai skalanya. Alpha Cleanup, Metadata Strip, dan encoder PNG bersifat lossless secara visual.
+</details>
+
+<details>
+<summary><b>Ukuran hasil tidak lebih kecil, kenapa?</b></summary>
+
+Pack kemungkinan sudah sangat optimal. Size Guard menjaga agar file tidak membesar. Coba preset **Ultra Compress** atau aktifkan **Palette Quantize** bila boleh ada sedikit perubahan warna.
+</details>
+
+<details>
+<summary><b>Apakah OGG di-re-encode?</b></summary>
+
+Tidak. Hanya metadata ID3 dan padding yang dibuang, kualitas audio identik.
+</details>
+
+<details>
+<summary><b>Browser apa yang disarankan?</b></summary>
+
+Chrome atau browser berbasis Chromium (Edge, Brave, dll). Dibutuhkan Web Worker, OffscreenCanvas, dan Compression Streams.
+</details>
+
+---
+
+## 📝 Changelog
+
+### v2.2
+- 🐞 **Fix:** ukuran pack naik setelah optimize (encoder canvas + tanpa size guard)
+- 🐞 **Fix:** texture kecil tidak lagi di-upscale; atlas non-strip tidak lagi digepengkan
+- 🐞 **Fix:** file tidak lagi hilang saat worker gagal; worker kini paralel sungguhan
+- ✨ Smart PNG Encoder, Size Guard universal, mode & preset Lossless Safe
+- ✨ Palette Quantize opsional, ringkasan hasil baru (Top penghematan, Download lagi)
+
+### v2.0
+- Astro.js + SEO enterprise (SSG, JSON-LD, sitemap)
+- Pack Analyzer, preset system, power-of-two, JSON key sorting, `.lang` & `.bbmodel`
+
+### v1.x
+- Alpha cleanup, single-color detection, deep JSON clean, OGG safe strip, Web Workers, Pojav Log Auto-Fix, SHA-1
+
+---
+
+## 🤝 Kontribusi
+
+Issue dan pull request sangat diterima.
+
+1. Fork repo ini
+2. Buat branch: `git checkout -b fitur/nama-fitur`
+3. Jalankan `npm run test:png` dan `npm run build`
+4. Commit & buka Pull Request
+
+---
+
+## ⚖️ Lisensi & Kredit
+
+Kode dirilis di bawah lisensi [MIT](LICENSE).
+
+**Ghaizers 2.0** dibuat oleh **ghaa ([KhaizenNomazen](https://github.com/KhaizenNomazen))**.
+Tool ini **gratis**. Jika ada yang menjualnya kepadamu, kamu sedang ditipu — laporkan lewat GitHub.
+
+<div align="center">
+
+⭐ Kalau tool ini membantu, kasih bintang di repo ya!
+
+[**optimizer.ghaa.my.id**](https://optimizer.ghaa.my.id)
+
+</div>
