@@ -888,6 +888,22 @@ export default function Home() {
       const entries = Object.values(zip.files);
       const stats = { totalFiles:0, pngCount:0, pngOptimized:0, pngSkippedByIHDR:0, pngSingleColor:0, pngAlphaCleaned:0, pngPowerOfTwo:0, pngMetaStrippedBytes:0, jsonCount:0, jsonMinified:0, jsonDeepCleaned:0, jsonKeySorted:0, removed:0, oggCount:0, oggOptimized:0, shaderCount:0, shaderMinified:0, langCount:0, bbmodelCount:0, oversizedWarnings:0, pngGuarded:0, pngPalette:0, pngQuantized:0, pngBytesSaved:0 };
       const fileDeltas = [];
+      // Diagnosa: ukuran asli (terkompresi vs isi sebenarnya) per tipe file + deteksi file identik
+      const typeStats = {};
+      const dupSeen = new Map();
+      let dupFiles = 0, dupBytes = 0;
+      for (const e of entries) {
+        if (e.dir) continue;
+        const u = e._data?.uncompressedSize ?? 0, c = e._data?.compressedSize ?? 0;
+        const ext = (e.name.split(".").pop() || "?").toLowerCase();
+        const t = (typeStats[ext] ||= { n:0, u:0, c:0 });
+        t.n++; t.u += u; t.c += c;
+        const crc = e._data?.crc32;
+        if (crc !== undefined && u > 0) {
+          const key = `${u}:${crc}`;
+          if (dupSeen.has(key)) { dupFiles++; dupBytes += u; } else dupSeen.set(key, e.name);
+        }
+      }
       const totalToProcess = entries.filter(e => !e.dir).length;
       setProgress({ done:0, total:totalToProcess, etaSec:null });
       let done = 0;
@@ -942,8 +958,9 @@ export default function Home() {
         if (lower.endsWith(".ogg")) {
           stats.oggCount++;
           const buf = await entry.async("arraybuffer");
-          if (optimizeOgg) { const { out, changed } = await optimizeOggSafe(buf); if(changed){stats.oggOptimized++;appendLog(`OGG: ${name}`);} outZip.file(name, out); }
-          else outZip.file(name, buf); return;
+          // OGG sudah terkompresi: simpan tanpa DEFLATE (tidak ada gain, hanya overhead)
+          if (optimizeOgg) { const { out, changed } = await optimizeOggSafe(buf); if(changed){stats.oggOptimized++;appendLog(`OGG: ${name}`);} outZip.file(name, out, { compression:"STORE" }); }
+          else outZip.file(name, buf, { compression:"STORE" }); return;
         }
         if (lower.endsWith(".png")) {
           stats.pngCount++;
@@ -1030,6 +1047,15 @@ export default function Home() {
       appendLog("Credit injected.");
       if (iconBuffer) { appendLog("Override pack.png..."); outZip.file("pack.png", iconBuffer); }
       else if (iconFile) { appendLog("Override pack.png..."); outZip.file("pack.png", await buildPackIcon(iconFile)); }
+      {
+        const mb = n => (n/1e6).toFixed(2) + " MB";
+        const tu = Object.values(typeStats).reduce((a,t)=>a+t.u,0), tc = Object.values(typeStats).reduce((a,t)=>a+t.c,0);
+        appendLog(`Diagnosa ZIP asli: isi sebenarnya ${mb(tu)} · tersimpan ${mb(tc)} (file ZIP ${mb(file.size)})`);
+        Object.entries(typeStats).sort((a,b)=>b[1].u-a[1].u).slice(0,6)
+          .forEach(([ext,t]) => appendLog(`  .${ext}: ${t.n} file · isi ${mb(t.u)} · tersimpan ${mb(t.c)}`));
+        if (dupFiles > 0) appendLog(`WARN Duplikat: ${dupFiles} file identik (${mb(dupBytes)}). Jika ZIP asli berbagi data duplikat (dedupe), hasil bisa membesar karena tiap file ditulis penuh.`);
+      }
+      stats.dupFiles = dupFiles; stats.dupBytes = dupBytes;
       appendLog("Menyusun ZIP...");
       const blob = await outZip.generateAsync({
         type:"blob", compression:"DEFLATE",
@@ -1466,6 +1492,7 @@ export default function Home() {
                   {summary.pngBytesSaved>0&&<SummaryCard label="PNG Dihemat" value={summary.pngBytesSaved>1e6?`${(summary.pngBytesSaved/1e6).toFixed(2)}MB`:`${(summary.pngBytesSaved/1e3).toFixed(1)}KB`}/>}
                   {summary.pngPalette>0&&<SummaryCard label="Palette PNG" value={summary.pngPalette}/>}
                   {summary.pngGuarded>0&&<SummaryCard label="Size Guard (tetap asli)" value={summary.pngGuarded}/>}
+                  {summary.dupFiles>0&&<SummaryCard label="File Identik (duplikat)" value={`${summary.dupFiles} (${(summary.dupBytes/1e6).toFixed(1)}MB)`}/>}
                   {summary.pngQuantized>0&&<SummaryCard label="Quantized" value={summary.pngQuantized}/>}
                   <SummaryCard label={tr.sum_png_skip} value={summary.pngSkippedByIHDR}/>
                   {summary.pngSingleColor>0&&<SummaryCard label={tr.sum_single} value={summary.pngSingleColor}/>}
