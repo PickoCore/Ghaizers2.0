@@ -4,13 +4,14 @@
 
 # Ghaizers 2.0
 
-**Minecraft Resource Pack Optimizer — 100% di browser, gratis, tanpa upload.**
+**Minecraft Resource Pack Optimizer — runs 100% in your browser. Free, private, no uploads.**
 
-Kecilkan ukuran pack, ringankan untuk HP & Pojav, tanpa mengorbankan tampilan.
+Shrink your pack, lighten it for mobile and Pojav, and keep it looking the way it should.
 
 [![Live](https://img.shields.io/badge/LIVE-optimizer.ghaa.my.id-22c55e?style=for-the-badge)](https://optimizer.ghaa.my.id)
-[![Version](https://img.shields.io/badge/version-2.2.0-6366f1?style=for-the-badge)](#-changelog)
+[![Version](https://img.shields.io/badge/version-2.2.1-6366f1?style=for-the-badge)](#-changelog)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![Made in Indonesia](https://img.shields.io/badge/Made%20in-Indonesia%20🇮🇩-ef4444?style=for-the-badge)](#-made-in-indonesia)
 
 ![Astro](https://img.shields.io/badge/Astro-4-ff5d01?logo=astro&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=black)
@@ -18,89 +19,90 @@ Kecilkan ukuran pack, ringankan untuk HP & Pojav, tanpa mengorbankan tampilan.
 ![No upload](https://img.shields.io/badge/server%20upload-none-success)
 ![Lossless](https://img.shields.io/badge/PNG%20engine-lossless-8b5cf6)
 
-[**Coba Sekarang**](https://optimizer.ghaa.my.id) · [Fitur](#-fitur-utama) · [Cara Kerja](#-cara-kerja) · [Instalasi](#-instalasi) · [FAQ](#-faq)
+[**Try it now**](https://optimizer.ghaa.my.id) · [Features](#-features) · [How it works](#-how-it-works) · [Getting started](#-getting-started) · [FAQ](#-faq)
 
 </div>
 
 ---
 
-## ✨ Kenapa Ghaizers?
+## ✨ Why Ghaizers?
 
 | | |
 |---|---|
-| 🔒 **Privat** | Semua proses berjalan di browser kamu. Pack tidak pernah dikirim ke server mana pun. |
-| 🧠 **Smart PNG Encoder** | Encoder PNG lossless buatan sendiri (palette + adaptive filter), bukan encoder canvas browser yang sering membuat file membesar. |
-| 🛡️ **Size Guard** | Setiap file dibandingkan dengan aslinya. Yang lebih kecil yang dipakai, jadi pack tidak akan membesar. |
-| ⚡ **Cepat** | Pemrosesan paralel dengan Web Worker pool, browser tidak freeze. |
-| 📱 **Ramah HP** | UI responsif, preset khusus Pojav Launcher & device low-end. |
-| 🆓 **Gratis selamanya** | Open source, tanpa akun, tanpa iklan. |
+| 🔒 **Private** | Everything runs in your browser. Your pack is never sent to any server. |
+| 🧠 **Smart PNG Encoder** | A custom lossless PNG encoder (palette + adaptive filtering) instead of the browser canvas encoder, which often makes files *bigger*. |
+| 🛡️ **Size Guard** | Every file is compared against the original. The smaller one wins, so your pack never grows. |
+| ⚡ **Fast** | Parallel processing with a Web Worker pool. The UI never freezes. |
+| 📱 **Mobile-friendly** | Responsive UI with presets for Pojav Launcher and low-end devices. |
+| 🆓 **Free forever** | Open source. No account, no ads. |
 
 ---
 
-## 🚀 Fitur Utama
+## 🚀 Features
 
 ### 🖼️ PNG
-- **Smart PNG Encoder** — palette/indexed (1/2/4/8-bit), color type minimum, adaptive row filter. 100% lossless.
-- **Smart Resize** — scale per kategori folder (GUI, font, entity, particle). Texture **tidak pernah di-upscale**.
-- **Alpha Cleanup** — nol-kan RGB pada pixel transparan penuh (tanpa perubahan visual).
-- **Single-Color Detection** — texture satu warna dipadatkan menjadi 1×1.
-- **Power-of-Two** — snap ke 16/32/64/… untuk efisiensi GPU.
-- **Metadata Strip** — buang chunk tersembunyi (`tEXt`, `iCCP`, `gAMA`, dll).
-- **Palette Quantize** *(opsional, lossy)* — texture besar dikurangi jadi maks 256 warna.
-- **Aman by design** — APNG, PNG interlaced, dan 16-bit tidak disentuh.
+- **Smart PNG Encoder**: indexed/palette (1/2/4/8-bit), minimal color type, adaptive row filtering. 100% lossless.
+- **Smart Resize**: per-category scaling (GUI, font, entity, particle). Textures are **never upscaled**.
+- **Alpha Cleanup**: zeroes RGB on fully transparent pixels (no visual change).
+- **Single-Color Detection**: collapses solid-color textures to 1×1.
+- **Power-of-Two**: snaps dimensions to 16/32/64/… for GPU efficiency.
+- **Metadata Strip**: removes hidden chunks (`tEXt`, `iCCP`, `gAMA`, etc.).
+- **Palette Quantize** *(optional, lossy)*: reduces large textures to at most 256 colors.
+- **Safe by design**: animated PNG (APNG), interlaced, and 16-bit PNGs are left untouched.
 
-### 📄 File lain
-- **JSON** — minify, deep clean (hapus field komentar), key sorting untuk kompresi lebih baik.
-- **OGG** — strip ID3 & padding, **tanpa re-encode** (kualitas identik).
-- **Shader / `.properties` / `.lang` / `.bbmodel`** — minify & cleanup.
-- **File sampah** — `.DS_Store`, `Thumbs.db`, `__MACOSX`, dll otomatis dibuang.
+### 📄 Everything else
+- **JSON**: minify, deep clean (removes comment fields), key sorting for better compression.
+- **OGG**: strips ID3 tags and padding with **no re-encoding**. Audio quality stays identical. Stored without DEFLATE since OGG is already compressed.
+- **Shaders / `.properties` / `.lang` / `.bbmodel`**: minify and cleanup.
+- **Junk files**: `.DS_Store`, `Thumbs.db`, `__MACOSX`, and similar are removed automatically.
 
 ### 🧰 Tools
-- **Pack Analyzer** — scan masalah (oversized, JSON rusak, duplikat, file kosong) tanpa optimize.
-- **pack.mcmeta Editor** — edit langsung, credit otomatis diinjeksi.
-- **Pojav Log Auto-Fix** — parse `latestlog.txt` dan perbaiki texture animasi bermasalah.
-- **Custom pack icon**, **SHA-1 checksum**, **Badge generator**, **Share hasil**.
-- **Dwibahasa** — Indonesia & English.
+- **Pack Analyzer**: scan for problems (oversized textures, broken JSON, duplicates, empty files) without optimizing.
+- **ZIP Diagnostics**: after optimizing, the log shows original stored vs. real size per file type and detects identical (duplicate) files.
+- **pack.mcmeta Editor** with automatic credit injection.
+- **Pojav Log Auto-Fix**: parses `latestlog.txt` and fixes problematic animated textures.
+- **Custom pack icon**, **SHA-1 checksum**, **badge generator**, **share results**.
+- **Bilingual UI**: Indonesian and English.
 
 ---
 
-## 🎚️ Mode & Preset
+## 🎚️ Modes & Presets
 
-| Mode | Scale | Maks. ukuran | Cocok untuk |
+| Mode | Scale | Max size | Best for |
 |---|:---:|:---:|---|
-| **Lossless** | 100% | Tanpa resize | Pack yang tampilannya tidak boleh berubah |
-| **Normal** | 85% | 512 px | Seimbang kualitas & ukuran |
-| **Extreme** | 55% | 128 px | Device mid–low |
-| **Ultra Extreme** | 35% | 64 px | HP kentang / Pojav lemah |
+| **Lossless** | 100% | No resize | Packs that must look exactly the same |
+| **Normal** | 85% | 512 px | Balanced quality and size |
+| **Extreme** | 55% | 128 px | Mid to low-end devices |
+| **Ultra Extreme** | 35% | 64 px | Very weak phones / low-end Pojav |
 
-**Preset siap pakai:** `Lossless Safe` · `Pojav Lite` · `Server Pack` · `Ultra Compress` · `Quality`
+**Ready-made presets:** `Lossless Safe` · `Pojav Lite` · `Server Pack` · `Ultra Compress` · `Quality`
 
-> 💡 Mulai dari **Lossless Safe** untuk hasil aman, lalu naik ke mode lebih agresif bila perlu.
-
----
-
-## 🔬 Cara Kerja
-
-```
- ZIP pack ──► scan entri ──► proses paralel (Web Worker pool)
-                               │
-                               ├─ PNG  : strip meta → resize → alpha clean → (quantize)
-                               │         → encode lossless → ⚖️ Size Guard (pilih terkecil)
-                               ├─ JSON : clean → sort → minify
-                               ├─ OGG  : strip ID3 (tanpa re-encode)
-                               └─ lainnya: copy / minify
-                               │
-                               ▼
-                    susun ZIP ──► SHA-1 ──► download
-```
-
-**Kenapa PNG bisa membesar di optimizer lain?** Encoder PNG bawaan browser (canvas) selalu menulis RGBA tanpa palette dan tanpa filter optimal, sehingga hasilnya sering lebih besar dari PNG asli. Ghaizers menulis PNG sendiri (`src/lib/png.js`) lalu membandingkan hasilnya dengan file asli sebelum dipakai.
+> 💡 Start with **Lossless Safe** for guaranteed-safe results, then move to more aggressive modes if you need to.
 
 ---
 
-## 📦 Instalasi
+## 🔬 How It Works
 
-**Prasyarat:** Node.js 18+ (disarankan LTS)
+```
+ pack ZIP ──► scan entries ──► parallel processing (Web Worker pool)
+                                 │
+                                 ├─ PNG   : strip meta → resize → alpha clean → (quantize)
+                                 │          → lossless encode → ⚖️ Size Guard (keep smallest)
+                                 ├─ JSON  : clean → sort → minify
+                                 ├─ OGG   : strip ID3 (no re-encode), stored as-is
+                                 └─ other : copy / minify
+                                 │
+                                 ▼
+                      build ZIP ──► SHA-1 ──► download
+```
+
+**Why do PNGs grow in other optimizers?** The browser's built-in canvas PNG encoder always writes RGBA with no palette and no optimal filtering, so the output is frequently larger than the original. Ghaizers writes PNGs itself (`src/lib/png.js`) and compares the result with the original before using it.
+
+---
+
+## 📦 Getting Started
+
+**Requirements:** Node.js 18+ (LTS recommended)
 
 ```bash
 git clone https://github.com/PickoCore/Ghaizers2.0.git
@@ -109,14 +111,14 @@ npm install
 npm run dev        # http://localhost:4321
 ```
 
-| Perintah | Fungsi |
+| Command | Description |
 |---|---|
-| `npm run dev` | Dev server |
-| `npm run build` | Build produksi ke `dist/` |
-| `npm run preview` | Preview hasil build |
-| `npm run test:png` | Tes engine PNG (round-trip lossless) |
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build to `dist/` |
+| `npm run preview` | Preview the production build |
+| `npm run test:png` | Run PNG engine tests (lossless round-trip) |
 
-### 📱 Lewat Termux
+### 📱 Run on Android (Termux)
 
 ```bash
 pkg update -y && pkg install git nodejs-lts -y
@@ -126,39 +128,39 @@ cd Ghaizers2.0 && npm install && npm run dev
 
 ### ☁️ Deploy
 
-Project ini statis (SSG) dan siap di Vercel, Cloudflare Pages, atau Netlify.
+The project is fully static (SSG) and works on Vercel, Cloudflare Pages, and Netlify.
 Build command: `npm run build` · Output directory: `dist`
 
 ---
 
-## 🗂️ Struktur Project
+## 🗂️ Project Structure
 
 ```
 Ghaizers2.0/
 ├── astro.config.mjs
 ├── package.json
-├── public/                    # favicon, manifest, robots.txt, sitemap
+├── public/                    # favicons, manifest, robots.txt, sitemap
 ├── scripts/
-│   └── test-png.mjs           # tes engine PNG
+│   └── test-png.mjs           # PNG engine tests
 └── src/
     ├── components/
-    │   ├── PackOptimizer.jsx  # UI + pipeline utama (React island)
+    │   ├── PackOptimizer.jsx  # main UI + pipeline (React island)
     │   ├── PrivacyContent.jsx
     │   └── TermsContent.jsx
     ├── layouts/Layout.astro   # SEO shell: meta, OG, JSON-LD
     ├── lib/
-    │   ├── png.js             # decoder/encoder/quantizer PNG lossless
-    │   ├── pngWorker.js       # Web Worker: 1 job = 1 PNG
-    │   └── i18n.js            # terjemahan ID/EN
+    │   ├── png.js             # lossless PNG decoder/encoder/quantizer
+    │   ├── pngWorker.js       # Web Worker: one job = one PNG
+    │   └── i18n.js            # ID/EN translations
     ├── pages/                 # index, privacy, terms
     └── styles/globals.css
 ```
 
 ---
 
-## 🧪 Pengujian
+## 🧪 Testing
 
-Engine PNG dites round-trip terhadap pixel asli (decode → encode → decode) untuk palette, grayscale, RGB, RGBA, dan 1-bit.
+The PNG engine is verified with lossless round-trip tests (decode → encode → decode) covering palette, grayscale, RGB, RGBA, and 1-bit images.
 
 ```bash
 npm run test:png
@@ -169,76 +171,94 @@ npm run test:png
 ## ❓ FAQ
 
 <details>
-<summary><b>Apakah pack saya diunggah ke server?</b></summary>
+<summary><b>Is my pack uploaded to a server?</b></summary>
 
-Tidak. Semua proses terjadi di browser (client-side).
+No. All processing happens locally in your browser.
 </details>
 
 <details>
-<summary><b>Apakah kualitas texture berkurang?</b></summary>
+<summary><b>Will texture quality drop?</b></summary>
 
-Tergantung mode. **Lossless** tidak mengubah pixel sama sekali. Mode Normal/Extreme/Ultra menurunkan resolusi sesuai skalanya. Alpha Cleanup, Metadata Strip, dan encoder PNG bersifat lossless secara visual.
+It depends on the mode. **Lossless** does not change a single pixel. Normal, Extreme, and Ultra reduce resolution according to their scale. Alpha Cleanup, Metadata Strip, and the PNG encoder are visually lossless.
 </details>
 
 <details>
-<summary><b>Ukuran hasil tidak lebih kecil, kenapa?</b></summary>
+<summary><b>The result isn't smaller. Why?</b></summary>
 
-Pack kemungkinan sudah sangat optimal. Size Guard menjaga agar file tidak membesar. Coba preset **Ultra Compress** atau aktifkan **Palette Quantize** bila boleh ada sedikit perubahan warna.
+Your pack may already be highly optimized. Size Guard makes sure files never grow. Try the **Ultra Compress** preset, or enable **Palette Quantize** if slight color changes are acceptable. If the result is not smaller than the original, auto-download is skipped, but you can still download it manually.
 </details>
 
 <details>
-<summary><b>Apakah OGG di-re-encode?</b></summary>
+<summary><b>My sound-only pack got bigger. Why?</b></summary>
 
-Tidak. Hanya metadata ID3 dan padding yang dibuang, kualitas audio identik.
+OGG files are already compressed, so there is little to gain, and some packs store identical sounds only once (deduplicated ZIP). Rewriting such a ZIP writes every duplicate in full. Check the **ZIP Diagnostics** lines in the log for duplicate counts and per-type sizes.
 </details>
 
 <details>
-<summary><b>Browser apa yang disarankan?</b></summary>
+<summary><b>Are OGG files re-encoded?</b></summary>
 
-Chrome atau browser berbasis Chromium (Edge, Brave, dll). Dibutuhkan Web Worker, OffscreenCanvas, dan Compression Streams.
+No. Only ID3 metadata and padding are removed. Audio quality is identical.
+</details>
+
+<details>
+<summary><b>Which browser should I use?</b></summary>
+
+Chrome or any Chromium-based browser (Edge, Brave, etc.). Web Workers, OffscreenCanvas, and Compression Streams are required.
 </details>
 
 ---
 
 ## 📝 Changelog
 
+### v2.2.1
+- ✨ ZIP diagnostics in the log (stored vs. real size per file type) and duplicate file detection
+- 🛠️ OGG files are stored without DEFLATE
+
 ### v2.2
-- 🐞 **Fix:** ukuran pack naik setelah optimize (encoder canvas + tanpa size guard)
-- 🐞 **Fix:** texture kecil tidak lagi di-upscale; atlas non-strip tidak lagi digepengkan
-- 🐞 **Fix:** file tidak lagi hilang saat worker gagal; worker kini paralel sungguhan
-- ✨ Smart PNG Encoder, Size Guard universal, mode & preset Lossless Safe
-- ✨ Palette Quantize opsional, ringkasan hasil baru (Top penghematan, Download lagi)
+- 🐞 **Fix:** pack size increasing after optimization (canvas encoder + missing size guard)
+- 🐞 **Fix:** small textures are no longer upscaled; non-strip atlases are no longer squashed
+- 🐞 **Fix:** files no longer disappear when a worker fails; workers now run truly in parallel
+- ✨ Smart PNG Encoder, universal Size Guard, Lossless mode and preset
+- ✨ Optional Palette Quantize, new results summary (top savings, re-download)
 
 ### v2.0
-- Astro.js + SEO enterprise (SSG, JSON-LD, sitemap)
-- Pack Analyzer, preset system, power-of-two, JSON key sorting, `.lang` & `.bbmodel`
+- Astro.js + enterprise SEO (SSG, JSON-LD, sitemap)
+- Pack Analyzer, preset system, power-of-two, JSON key sorting, `.lang` and `.bbmodel` support
 
 ### v1.x
-- Alpha cleanup, single-color detection, deep JSON clean, OGG safe strip, Web Workers, Pojav Log Auto-Fix, SHA-1
+- Alpha cleanup, single-color detection, deep JSON clean, safe OGG strip, Web Workers, Pojav Log Auto-Fix, SHA-1
 
 ---
 
-## 🤝 Kontribusi
+## 🤝 Contributing
 
-Issue dan pull request sangat diterima.
+Issues and pull requests are welcome.
 
-1. Fork repo ini
-2. Buat branch: `git checkout -b fitur/nama-fitur`
-3. Jalankan `npm run test:png` dan `npm run build`
-4. Commit & buka Pull Request
+1. Fork this repository
+2. Create a branch: `git checkout -b feature/your-feature`
+3. Run `npm run test:png` and `npm run build`
+4. Commit and open a Pull Request
 
 ---
 
-## ⚖️ Lisensi & Kredit
+## 🇮🇩 Made in Indonesia
 
-Kode dirilis di bawah lisensi [MIT](LICENSE).
+Ghaizers 2.0 is proudly **made from Indonesia 🇮🇩** for Minecraft players and pack creators around the world.
 
-**Ghaizers 2.0** dibuat oleh **ghaa ([KhaizenNomazen](https://github.com/KhaizenNomazen))**.
-Tool ini **gratis**. Jika ada yang menjualnya kepadamu, kamu sedang ditipu — laporkan lewat GitHub.
+---
+
+## ⚖️ License & Credits
+
+Released under the [MIT License](LICENSE).
+
+**Ghaizers 2.0** is created by **ghaa ([KhaizenNomazen](https://github.com/KhaizenNomazen))**.
+This tool is **free**. If someone is selling it to you, you are being scammed. Please report it via GitHub.
 
 <div align="center">
 
-⭐ Kalau tool ini membantu, kasih bintang di repo ya!
+⭐ If this tool helped you, consider giving the repo a star!
+
+**Made with ❤️ in Indonesia 🇮🇩**
 
 [**optimizer.ghaa.my.id**](https://optimizer.ghaa.my.id)
 
